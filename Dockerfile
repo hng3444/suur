@@ -23,14 +23,19 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     MAX_UPLOAD_MB=10
 
-RUN mkdir -p /data/uploads && chown -R node:node /data
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gosu \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /data/uploads/profiles \
+  && chown -R node:node /data
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/public ./public
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-USER node
 EXPOSE 3000
 VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

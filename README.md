@@ -86,6 +86,14 @@ Suur HTTPS altında veya `localhost` üzerinden açıldığında Android, iOS ve
 
 CasaOS’ta Compose uygulaması olarak bu klasörü içe aktarın. `SUUR_PORT` host portunu, `3000` ise container portunu temsil eder. Kalıcı volume’u silmediğiniz sürece uygulama güncellemeleri kullanıcı verisini etkilemez.
 
+Hazır container image her `main` güncellemesinde GitHub Container Registry’ye yayınlanır:
+
+```text
+ghcr.io/hng3444/suur:latest
+```
+
+CasaOS Manuel Uygulama Kurulumu ekranında container portu `3000`, host portu `3721`, kalıcı host klasörü `/DATA/AppData/suur`, container klasörü `/data` olmalıdır. Image ilk yayınlandıktan sonra GitHub Packages ayarından görünürlüğünü `Public` yapın.
+
 ## Güvenlik notu
 
 Suur; HttpOnly, SameSite oturum çerezi ve scrypt ile özetlenen parolalar kullanan yerleşik çok kullanıcılı kimlik doğrulama içerir. Kullanıcıların notları, etiketleri, ayarları ve offline tarayıcı verileri birbirinden ayrıdır. İnternete açacaksanız HTTPS kullanan bir reverse proxy kullanın ve varsayılan parolayı hemen değiştirin. Docker imajı root olmayan kullanıcıyla ve `no-new-privileges` ile çalışır; uygulama telemetrisi kapalıdır.
