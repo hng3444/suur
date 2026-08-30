@@ -1,0 +1,8 @@
+{
+  "title": "Takeout deneme notu",
+  "textContent": "Google Keep aktarımı çalışıyor.",
+  "color": "GREEN",
+  "isPinned": true,
+  "labels": [{ "name": "İçe aktarılan" }],
+  "userEditedTimestampUsec": "1788076800000000"
+}

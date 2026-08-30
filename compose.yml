@@ -1,0 +1,36 @@
+services:
+  suur:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SUUR_PUBLIC_URL: "${SUUR_PUBLIC_URL:-http://localhost:3721}"
+    image: suur:local
+    container_name: suur
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${SUUR_PORT:-3721}:3000"
+    environment:
+      DATA_DIR: /data
+      MAX_UPLOAD_MB: "${SUUR_MAX_UPLOAD_MB:-10}"
+      SUUR_PUBLIC_URL: "${SUUR_PUBLIC_URL:-http://localhost:3721}"
+      SUUR_DEFAULT_USERNAME: "${SUUR_DEFAULT_USERNAME:-alaferoce}"
+      SUUR_DEFAULT_PASSWORD: "${SUUR_DEFAULT_PASSWORD:-7Admin7}"
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - suur-data:/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  suur-data:
+    name: "${SUUR_VOLUME_NAME:-suur-data}"

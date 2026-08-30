@@ -1,0 +1,12 @@
+.git
+.gitignore
+.next
+.vinext
+.wrangler
+.openai
+node_modules
+data
+backups
+npm-debug.log*
+Dockerfile*
+README.md
