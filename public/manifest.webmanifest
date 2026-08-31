@@ -1,14 +1,14 @@
 {
   "name": "Suur",
   "short_name": "Suur",
-  "description": "Hızlı, sade ve self-hosted not alma uygulaması.",
+  "description": "Fast, private, multilingual, self-hosted notes with offline support.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#f6f8f5",
   "theme_color": "#198754",
-  "lang": "tr",
+  "lang": "en",
   "categories": ["productivity", "utilities"],
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

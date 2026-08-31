@@ -21,7 +21,7 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     DATA_DIR=/data \
-    MAX_UPLOAD_MB=10
+    MAX_UPLOAD_MB=25
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends gosu \

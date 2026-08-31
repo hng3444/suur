@@ -10,22 +10,39 @@ export const checklistItemSchema = z.object({
   checked: z.boolean(),
 });
 
-export const noteCreateSchema = z.object({
-  id: idSchema.optional(),
-  title: z.string().max(500).default(''),
-  content: z.string().max(100_000).default(''),
-  type: z.enum(['text', 'checklist']).default('text'),
-  items: z.array(checklistItemSchema).max(500).default([]),
-  color: z.enum(colors).default('default'),
-  pinned: z.boolean().default(false),
-  archived: z.boolean().default(false),
-  trashedAt: dateSchema.optional().default(null),
-  reminderAt: dateSchema.optional().default(null),
+const noteFieldsSchema = z.object({
+  title: z.string().max(500),
+  content: z.string().max(100_000),
+  contentFormat: z.enum(['plain', 'markdown']),
+  type: z.enum(['text', 'checklist']),
+  items: z.array(checklistItemSchema).max(500),
+  color: z.enum(colors),
+  pinned: z.boolean(),
+  archived: z.boolean(),
+  trashedAt: dateSchema,
+  reminderAt: dateSchema,
   position: z.number().finite().optional(),
-  labelIds: z.array(idSchema).max(100).default([]),
+  labelIds: z.array(idSchema).max(100),
+  assignedUserId: idSchema.nullable(),
 });
 
-export const noteUpdateSchema = noteCreateSchema.omit({ id: true }).partial().extend({
+export const noteCreateSchema = noteFieldsSchema.extend({
+  id: idSchema.optional(),
+  title: noteFieldsSchema.shape.title.default(''),
+  content: noteFieldsSchema.shape.content.default(''),
+  contentFormat: noteFieldsSchema.shape.contentFormat.default('plain'),
+  type: noteFieldsSchema.shape.type.default('text'),
+  items: noteFieldsSchema.shape.items.default([]),
+  color: noteFieldsSchema.shape.color.default('default'),
+  pinned: noteFieldsSchema.shape.pinned.default(false),
+  archived: noteFieldsSchema.shape.archived.default(false),
+  trashedAt: noteFieldsSchema.shape.trashedAt.default(null),
+  reminderAt: noteFieldsSchema.shape.reminderAt.default(null),
+  labelIds: noteFieldsSchema.shape.labelIds.default([]),
+  assignedUserId: noteFieldsSchema.shape.assignedUserId.default(null),
+});
+
+export const noteUpdateSchema = noteFieldsSchema.partial().extend({
   baseVersion: z.number().int().positive().optional(),
 });
 
@@ -47,6 +64,12 @@ export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).optional(),
   view: z.enum(['grid', 'list']).optional(),
   sidebarCollapsed: z.boolean().optional(),
+  locale: z.enum(['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt', 'ru', 'tr']).optional(),
+  accent: z.enum(['forest', 'emerald', 'teal', 'blue', 'violet', 'amber']).optional(),
+  notificationsEnabled: z.boolean().optional(),
+  backupFrequency: z.enum(['off', 'daily', 'weekly']).optional(),
+  trashRetentionDays: z.number().int().min(1).max(365).optional(),
+  completedItemsBottom: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, 'En az bir ayar gerekli.');
 
 export const idParamSchema = idSchema;
@@ -64,6 +87,7 @@ export const userCreateSchema = z.object({
   displayName: z.string().trim().min(1).max(100),
   password: passwordSchema,
   role: z.enum(['superadmin', 'admin', 'user']).default('user'),
+  storageQuotaMb: z.number().int().min(50).max(102_400).default(512),
 });
 
 export const userUpdateSchema = z.object({
@@ -72,4 +96,5 @@ export const userUpdateSchema = z.object({
   password: passwordSchema.optional(),
   currentPassword: z.string().max(500).optional(),
   role: z.enum(['superadmin', 'admin', 'user']).optional(),
+  storageQuotaMb: z.number().int().min(50).max(102_400).optional(),
 }).refine((value) => Object.keys(value).length > 0, 'En az bir alan gerekli.');

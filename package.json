@@ -1,6 +1,10 @@
 {
   "name": "suur",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "A fast, private, multilingual, self-hosted notes app with offline-first PWA support.",
+  "keywords": ["self-hosted", "notes", "note-taking", "pwa", "offline-first", "docker", "casaos", "google-keep-alternative", "sqlite"],
+  "homepage": "https://github.com/hng3444/suur",
+  "repository": { "type": "git", "url": "https://github.com/hng3444/suur.git" },
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -9,7 +13,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",

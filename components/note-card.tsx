@@ -1,13 +1,20 @@
 'use client';
 
-import { Archive, ArchiveRestore, Bell, GripVertical, Pin, PinOff, Trash2, Undo2 } from 'lucide-react';
-import type { Note, NoteView } from '@/lib/types';
+import { Archive, ArchiveRestore, Bell, Check, GripVertical, Pin, PinOff, Trash2, Undo2 } from 'lucide-react';
+import { translate } from '@/lib/i18n';
+import { plainTextPreview } from '@/lib/client-utils';
+import type { Locale, Note, NoteView } from '@/lib/types';
 
 interface NoteCardProps {
   note: Note;
+  currentUserId: string;
+  locale: Locale;
   view: NoteView;
   layout: 'grid' | 'list';
   draggable: boolean;
+  selectionMode: boolean;
+  selected: boolean;
+  onSelect: (note: Note) => void;
   onOpen: (note: Note) => void;
   onPatch: (note: Note, patch: Partial<Note>, remove?: boolean) => void;
   onPermanentDelete: (note: Note) => void;
@@ -15,8 +22,8 @@ interface NoteCardProps {
   onDrop: (id: string) => void;
 }
 
-function reminderText(value: string) {
-  return new Intl.DateTimeFormat('tr-TR', {
+function reminderText(value: string, locale: Locale) {
+  return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -26,9 +33,14 @@ function reminderText(value: string) {
 
 export function NoteCard({
   note,
+  currentUserId,
+  locale,
   view,
   layout,
   draggable,
+  selectionMode,
+  selected,
+  onSelect,
   onOpen,
   onPatch,
   onPermanentDelete,
@@ -36,44 +48,49 @@ export function NoteCard({
   onDrop,
 }: NoteCardProps) {
   const stop = (event: React.MouseEvent) => event.stopPropagation();
+  const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(locale, key, values);
+  const ui = (turkish: string, english: string) => locale === 'tr' ? turkish : english;
+  const cover = note.attachments.find((attachment) => attachment.mimeType.startsWith('image/'));
 
   return (
     <article
-      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''}`}
-      onClick={() => onOpen(note)}
+      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${selected ? 'selected' : ''}`}
+      onClick={() => selectionMode ? onSelect(note) : onOpen(note)}
+      onContextMenu={(event) => { event.preventDefault(); onSelect(note); }}
       draggable={draggable}
       onDragStart={() => onDragStart(note.id)}
       onDragOver={(event) => { if (draggable) event.preventDefault(); }}
       onDrop={(event) => { event.preventDefault(); onDrop(note.id); }}
       tabIndex={0}
-      onKeyDown={(event) => { if (event.key === 'Enter') onOpen(note); }}
-      aria-label={`${note.title || 'Başlıksız not'} notunu aç`}
+      onKeyDown={(event) => { if (event.key === 'Enter') { if (selectionMode) onSelect(note); else onOpen(note); } }}
+      aria-label={note.title || t('untitled')}
     >
-      {note.attachments[0] && (
+      {selectionMode && <button className="note-select" onClick={(event) => { event.stopPropagation(); onSelect(note); }} aria-label={selected ? ui('Seçimi kaldır', 'Clear selection') : ui('Notu seç', 'Select note')}>{selected && <Check size={15} />}</button>}
+      {cover && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img className="note-cover" src={note.attachments[0].url} alt={note.attachments[0].filename} loading="lazy" />
+        <img className="note-cover" src={cover.url} alt={cover.filename} loading="lazy" />
       )}
       <div className="note-card-body">
         <div className="note-card-heading">
-          <h2>{note.title || 'Başlıksız not'}</h2>
+          <h2>{note.title || t('untitled')}</h2>
           {draggable && <GripVertical className="drag-handle" size={17} aria-hidden="true" />}
         </div>
         {note.type === 'checklist' ? (
           <ul className="checklist-preview">
             {note.items.slice(0, 6).map((item) => (
               <li className={item.checked ? 'checked' : ''} key={item.id}>
-                <span>{item.checked ? '✓' : ''}</span>{item.text || 'Boş öğe'}
+                <span>{item.checked ? '✓' : ''}</span>{item.text || t('blankItem')}
               </li>
             ))}
-            {note.items.length > 6 && <li className="more-items">+{note.items.length - 6} öğe</li>}
+            {note.items.length > 6 && <li className="more-items">{t('moreItems', { count: note.items.length - 6 })}</li>}
           </ul>
         ) : (
-          note.content && <p className="note-content">{note.content}</p>
+          note.content && <p className="note-content">{note.contentFormat === 'markdown' ? plainTextPreview(note.content) : note.content}</p>
         )}
 
         {(note.reminderAt || note.labels.length > 0) && (
           <div className="note-chips">
-            {note.reminderAt && <span className="note-chip"><Bell size={12} />{reminderText(note.reminderAt)}</span>}
+            {note.reminderAt && <span className="note-chip"><Bell size={12} />{reminderText(note.reminderAt, locale)}</span>}
             {note.labels.map((label) => <span className="note-chip" key={label.id}>{label.name}</span>)}
           </div>
         )}
@@ -81,18 +98,18 @@ export function NoteCard({
         <div className="note-actions" onClick={stop}>
           {view === 'trash' ? (
             <>
-              <button title="Geri yükle" aria-label="Notu geri yükle" onClick={() => onPatch(note, { trashedAt: null }, true)}><Undo2 size={16} /></button>
-              <button className="danger" title="Kalıcı sil" aria-label="Notu kalıcı sil" onClick={() => onPermanentDelete(note)}><Trash2 size={16} /></button>
+              <button title={t('restore')} aria-label={t('restore')} onClick={() => onPatch(note, { trashedAt: null }, true)}><Undo2 size={16} /></button>
+              {note.ownerId === currentUserId && <button className="danger" title={t('deleteForever')} aria-label={t('deleteForever')} onClick={() => onPermanentDelete(note)}><Trash2 size={16} /></button>}
             </>
           ) : (
             <>
-              <button title={note.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'} aria-label={note.pinned ? 'Sabitlemeyi kaldır' : 'Sabitle'} onClick={() => onPatch(note, { pinned: !note.pinned })}>
+              <button title={note.pinned ? t('unpin') : t('pin')} aria-label={note.pinned ? t('unpin') : t('pin')} onClick={() => onPatch(note, { pinned: !note.pinned })}>
                 {note.pinned ? <PinOff size={16} /> : <Pin size={16} />}
               </button>
-              <button title={note.archived ? 'Arşivden çıkar' : 'Arşivle'} aria-label={note.archived ? 'Arşivden çıkar' : 'Arşivle'} onClick={() => onPatch(note, { archived: !note.archived }, true)}>
+              <button title={note.archived ? t('unarchive') : t('archive')} aria-label={note.archived ? t('unarchive') : t('archive')} onClick={() => onPatch(note, { archived: !note.archived }, true)}>
                 {note.archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
               </button>
-              <button title="Çöp kutusuna taşı" aria-label="Çöp kutusuna taşı" onClick={() => onPatch(note, { trashedAt: new Date().toISOString() }, true)}><Trash2 size={16} /></button>
+              <button title={t('moveTrash')} aria-label={t('moveTrash')} onClick={() => onPatch(note, { trashedAt: new Date().toISOString() }, true)}><Trash2 size={16} /></button>
             </>
           )}
         </div>

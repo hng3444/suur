@@ -1,0 +1,98 @@
+import type { Locale } from '@/lib/types';
+
+export const languages: Array<{ value: Locale; label: string; dir: 'ltr' | 'rtl' }> = [
+  { value: 'en', label: 'English', dir: 'ltr' },
+  { value: 'zh', label: '中文', dir: 'ltr' },
+  { value: 'hi', label: 'हिन्दी', dir: 'ltr' },
+  { value: 'es', label: 'Español', dir: 'ltr' },
+  { value: 'ar', label: 'العربية', dir: 'rtl' },
+  { value: 'fr', label: 'Français', dir: 'ltr' },
+  { value: 'bn', label: 'বাংলা', dir: 'ltr' },
+  { value: 'pt', label: 'Português', dir: 'ltr' },
+  { value: 'ru', label: 'Русский', dir: 'ltr' },
+  { value: 'tr', label: 'Türkçe', dir: 'ltr' },
+];
+
+const en = {
+  'nav.notes': 'Notes', 'nav.reminders': 'Reminders', 'nav.calendar': 'Calendar', 'nav.labels': 'Labels', 'nav.archive': 'Archive', 'nav.trash': 'Trash', 'nav.settings': 'Settings', 'nav.createLabel': 'Create label',
+  'search': 'Search notes', 'newNote': 'Take a note…', 'newChecklist': 'New checklist', 'pinned': 'PINNED', 'others': 'OTHERS',
+  'empty.noMatch': 'No matching notes', 'empty.trash': 'Trash is empty', 'empty.archive': 'Archive is empty', 'empty.first': 'Create your first note', 'empty.searchHint': 'Try another search term.', 'empty.trashHint': 'Deleted notes appear here.', 'empty.firstHint': 'Leave it in Suur before the thought disappears.',
+  'untitled': 'Untitled note', 'blankItem': 'Empty item', 'moreItems': '+{count} items', 'restore': 'Restore', 'deleteForever': 'Delete forever', 'pin': 'Pin', 'unpin': 'Unpin', 'archive': 'Archive', 'unarchive': 'Unarchive', 'moveTrash': 'Move to trash',
+  'readMode': 'READ MODE', 'trashMode': 'TRASH', 'edit': 'Edit', 'close': 'Close', 'emptyText': 'This note has no text.',
+  'editor.new': 'NEW NOTE', 'editor.edit': 'EDIT NOTE', 'editor.title': 'Title', 'editor.item': 'List item', 'editor.addItem': 'Add item', 'editor.reminder': 'Reminder', 'editor.labels': 'Labels', 'editor.noLabels': 'No labels yet.', 'editor.text': 'Text note', 'editor.checklist': 'Checklist', 'editor.attachment': 'Add attachment',
+  'status.saved': 'Saved', 'status.saving': 'Saving…', 'status.offline': 'Offline', 'status.synced': 'Synced', 'status.syncing': 'Syncing',
+  'settings.language': 'Language', 'settings.languageHelp': 'Interface and date format', 'settings.appearance': 'Appearance',
+  'login.eyebrow': 'YOUR SPACE, YOUR NOTES', 'login.hero': 'Keep your thoughts\nwhere they belong.', 'login.heroText': 'Fast notes, a calm interface, and a server that belongs to you.', 'login.welcome': 'WELCOME BACK', 'login.title': 'Return to your notes', 'login.description': 'Sign in with your Suur account to continue.', 'login.username': 'Username', 'login.password': 'Password', 'login.action': 'Sign in', 'login.loading': 'Signing in…', 'login.private': 'Secure, personal, and self-hosted.', 'login.invalid': 'The username or password is incorrect.', 'login.failed': 'Sign-in could not be completed.', 'login.showPassword': 'Show password', 'login.hidePassword': 'Hide password',
+} as const;
+
+type MessageKey = keyof typeof en;
+type Messages = Partial<Record<MessageKey, string>>;
+
+const translations: Record<Locale, Messages> = {
+  en,
+  tr: {
+    'nav.notes': 'Notlar', 'nav.reminders': 'Hatırlatıcılar', 'nav.calendar': 'Takvim', 'nav.labels': 'Etiketler', 'nav.archive': 'Arşiv', 'nav.trash': 'Çöp kutusu', 'nav.settings': 'Ayarlar', 'nav.createLabel': 'Etiket oluştur',
+    'search': 'Notlarda ara', 'newNote': 'Bir not al…', 'newChecklist': 'Yeni checklist', 'pinned': 'SABİTLENMİŞ', 'others': 'DİĞER',
+    'empty.noMatch': 'Eşleşen not bulunamadı', 'empty.trash': 'Çöp kutusu boş', 'empty.archive': 'Arşiv boş', 'empty.first': 'İlk notunu oluştur', 'empty.searchHint': 'Başka bir kelimeyle aramayı dene.', 'empty.trashHint': 'Sildiğin notlar burada görünür.', 'empty.firstHint': 'Aklındakini kaybetmeden Suur’a bırak.',
+    'untitled': 'Başlıksız not', 'blankItem': 'Boş öğe', 'moreItems': '+{count} öğe', 'restore': 'Geri yükle', 'deleteForever': 'Kalıcı sil', 'pin': 'Sabitle', 'unpin': 'Sabitlemeyi kaldır', 'archive': 'Arşivle', 'unarchive': 'Arşivden çıkar', 'moveTrash': 'Çöp kutusuna taşı',
+    'readMode': 'OKUMA MODU', 'trashMode': 'ÇÖP KUTUSU', 'edit': 'Düzenle', 'close': 'Kapat', 'emptyText': 'Bu notta metin yok.',
+    'editor.new': 'YENİ NOT', 'editor.edit': 'NOTU DÜZENLE', 'editor.title': 'Başlık', 'editor.item': 'Liste öğesi', 'editor.addItem': 'Öğe ekle', 'editor.reminder': 'Hatırlatıcı', 'editor.labels': 'Etiketler', 'editor.noLabels': 'Henüz etiket yok.', 'editor.text': 'Metin notu', 'editor.checklist': 'Checklist', 'editor.attachment': 'Dosya ekle',
+    'status.saved': 'Kaydedildi', 'status.saving': 'Kaydediliyor…', 'status.offline': 'Çevrimdışı', 'status.synced': 'Senkronize', 'status.syncing': 'Senkronize ediliyor',
+    'settings.language': 'Dil', 'settings.languageHelp': 'Arayüz ve tarih biçimi', 'settings.appearance': 'Görünüm',
+    'login.eyebrow': 'KENDİ ALANIN, KENDİ NOTLARIN', 'login.hero': 'Aklındakini\nyerinde tut.', 'login.heroText': 'Hızlı notlar, sakin bir arayüz ve yalnızca sana ait bir sunucu.', 'login.welcome': 'HOŞ GELDİN', 'login.title': 'Notlarına dön', 'login.description': 'Devam etmek için Suur hesabınla giriş yap.', 'login.username': 'Kullanıcı adı', 'login.password': 'Şifre', 'login.action': 'Giriş yap', 'login.loading': 'Giriş yapılıyor…', 'login.private': 'Güvenli, kişisel ve self-hosted.', 'login.invalid': 'Kullanıcı adı veya şifre hatalı.', 'login.failed': 'Giriş işlemi tamamlanamadı.', 'login.showPassword': 'Şifreyi göster', 'login.hidePassword': 'Şifreyi gizle',
+  },
+  zh: {
+    'nav.notes':'笔记','nav.reminders':'提醒','nav.labels':'标签','nav.archive':'归档','nav.trash':'回收站','nav.settings':'设置','nav.createLabel':'新建标签','search':'搜索笔记','newNote':'记下内容…','newChecklist':'新建清单','pinned':'已置顶','others':'其他','empty.noMatch':'没有匹配的笔记','empty.trash':'回收站为空','empty.archive':'归档为空','empty.first':'创建第一条笔记','untitled':'无标题笔记','blankItem':'空项目','restore':'恢复','deleteForever':'永久删除','pin':'置顶','unpin':'取消置顶','archive':'归档','unarchive':'取消归档','moveTrash':'移至回收站','readMode':'阅读模式','trashMode':'回收站','edit':'编辑','close':'关闭','editor.new':'新笔记','editor.edit':'编辑笔记','editor.title':'标题','editor.item':'清单项目','editor.addItem':'添加项目','editor.reminder':'提醒','editor.labels':'标签','editor.noLabels':'暂无标签','editor.text':'文字笔记','editor.checklist':'清单','editor.attachment':'添加附件','status.saved':'已保存','status.saving':'保存中…','status.offline':'离线','status.synced':'已同步','status.syncing':'同步中','settings.language':'语言','settings.languageHelp':'界面和日期格式','login.welcome':'欢迎回来','login.title':'返回你的笔记','login.description':'请登录 Suur 账户以继续。','login.username':'用户名','login.password':'密码','login.action':'登录','login.loading':'正在登录…','login.private':'安全、私有、自托管。'
+  },
+  hi: {
+    'nav.notes':'नोट्स','nav.reminders':'रिमाइंडर','nav.labels':'लेबल','nav.archive':'संग्रह','nav.trash':'कचरा','nav.settings':'सेटिंग्स','nav.createLabel':'लेबल बनाएँ','search':'नोट्स खोजें','newNote':'एक नोट लिखें…','newChecklist':'नई चेकलिस्ट','pinned':'पिन किए गए','others':'अन्य','untitled':'बिना शीर्षक का नोट','restore':'वापस लाएँ','deleteForever':'हमेशा के लिए मिटाएँ','pin':'पिन करें','unpin':'पिन हटाएँ','archive':'संग्रहित करें','unarchive':'संग्रह से हटाएँ','moveTrash':'कचरे में डालें','readMode':'पढ़ने का मोड','edit':'संपादित करें','close':'बंद करें','editor.new':'नया नोट','editor.edit':'नोट संपादित करें','editor.title':'शीर्षक','editor.item':'सूची आइटम','editor.addItem':'आइटम जोड़ें','editor.reminder':'रिमाइंडर','editor.labels':'लेबल','editor.attachment':'फ़ाइल जोड़ें','status.saved':'सहेजा गया','status.saving':'सहेज रहे हैं…','status.offline':'ऑफ़लाइन','settings.language':'भाषा','settings.languageHelp':'इंटरफ़ेस और तारीख प्रारूप','login.welcome':'वापसी पर स्वागत है','login.title':'अपने नोट्स पर लौटें','login.description':'जारी रखने के लिए अपने Suur खाते से साइन इन करें।','login.username':'उपयोगकर्ता नाम','login.password':'पासवर्ड','login.action':'साइन इन','login.loading':'साइन इन हो रहा है…','login.private':'सुरक्षित, निजी और स्वयं होस्टेड।'
+  },
+  es: {
+    'nav.notes':'Notas','nav.reminders':'Recordatorios','nav.labels':'Etiquetas','nav.archive':'Archivo','nav.trash':'Papelera','nav.settings':'Ajustes','nav.createLabel':'Crear etiqueta','search':'Buscar notas','newNote':'Escribe una nota…','newChecklist':'Nueva lista','pinned':'FIJADAS','others':'OTRAS','empty.noMatch':'No hay notas coincidentes','empty.trash':'La papelera está vacía','empty.archive':'El archivo está vacío','empty.first':'Crea tu primera nota','untitled':'Nota sin título','blankItem':'Elemento vacío','restore':'Restaurar','deleteForever':'Eliminar para siempre','pin':'Fijar','unpin':'Desfijar','archive':'Archivar','unarchive':'Desarchivar','moveTrash':'Mover a la papelera','readMode':'MODO LECTURA','trashMode':'PAPELERA','edit':'Editar','close':'Cerrar','editor.new':'NUEVA NOTA','editor.edit':'EDITAR NOTA','editor.title':'Título','editor.item':'Elemento de lista','editor.addItem':'Añadir elemento','editor.reminder':'Recordatorio','editor.labels':'Etiquetas','editor.noLabels':'Aún no hay etiquetas.','editor.text':'Nota de texto','editor.checklist':'Lista','editor.attachment':'Añadir archivo','status.saved':'Guardado','status.saving':'Guardando…','status.offline':'Sin conexión','status.synced':'Sincronizado','status.syncing':'Sincronizando','settings.language':'Idioma','settings.languageHelp':'Interfaz y formato de fecha','login.welcome':'HOLA DE NUEVO','login.title':'Vuelve a tus notas','login.description':'Inicia sesión con tu cuenta Suur para continuar.','login.username':'Usuario','login.password':'Contraseña','login.action':'Iniciar sesión','login.loading':'Iniciando sesión…','login.private':'Seguro, personal y autohospedado.'
+  },
+  ar: {
+    'nav.notes':'الملاحظات','nav.reminders':'التذكيرات','nav.labels':'التصنيفات','nav.archive':'الأرشيف','nav.trash':'سلة المحذوفات','nav.settings':'الإعدادات','nav.createLabel':'إنشاء تصنيف','search':'البحث في الملاحظات','newNote':'اكتب ملاحظة…','newChecklist':'قائمة جديدة','pinned':'مثبتة','others':'أخرى','empty.noMatch':'لا توجد ملاحظات مطابقة','untitled':'ملاحظة بلا عنوان','restore':'استعادة','deleteForever':'حذف نهائي','pin':'تثبيت','unpin':'إلغاء التثبيت','archive':'أرشفة','unarchive':'إلغاء الأرشفة','moveTrash':'نقل إلى سلة المحذوفات','readMode':'وضع القراءة','edit':'تعديل','close':'إغلاق','editor.new':'ملاحظة جديدة','editor.edit':'تعديل الملاحظة','editor.title':'العنوان','editor.item':'عنصر القائمة','editor.addItem':'إضافة عنصر','editor.reminder':'تذكير','editor.labels':'التصنيفات','editor.attachment':'إضافة ملف','status.saved':'تم الحفظ','status.saving':'جارٍ الحفظ…','status.offline':'غير متصل','settings.language':'اللغة','settings.languageHelp':'الواجهة وتنسيق التاريخ','login.welcome':'مرحبًا بعودتك','login.title':'عد إلى ملاحظاتك','login.description':'سجّل الدخول إلى حساب Suur للمتابعة.','login.username':'اسم المستخدم','login.password':'كلمة المرور','login.action':'تسجيل الدخول','login.loading':'جارٍ تسجيل الدخول…','login.private':'آمن وشخصي ومستضاف ذاتيًا.'
+  },
+  fr: {
+    'nav.notes':'Notes','nav.reminders':'Rappels','nav.labels':'Libellés','nav.archive':'Archives','nav.trash':'Corbeille','nav.settings':'Paramètres','nav.createLabel':'Créer un libellé','search':'Rechercher des notes','newNote':'Écrire une note…','newChecklist':'Nouvelle liste','pinned':'ÉPINGLÉES','others':'AUTRES','untitled':'Note sans titre','restore':'Restaurer','deleteForever':'Supprimer définitivement','pin':'Épingler','unpin':'Désépingler','archive':'Archiver','unarchive':'Désarchiver','moveTrash':'Mettre à la corbeille','readMode':'MODE LECTURE','edit':'Modifier','close':'Fermer','editor.new':'NOUVELLE NOTE','editor.edit':'MODIFIER LA NOTE','editor.title':'Titre','editor.item':'Élément de liste','editor.addItem':'Ajouter un élément','editor.reminder':'Rappel','editor.labels':'Libellés','editor.attachment':'Ajouter un fichier','status.saved':'Enregistré','status.saving':'Enregistrement…','status.offline':'Hors connexion','settings.language':'Langue','settings.languageHelp':'Interface et format de date','login.welcome':'BON RETOUR','login.title':'Retrouvez vos notes','login.description':'Connectez-vous à votre compte Suur pour continuer.','login.username':'Nom d’utilisateur','login.password':'Mot de passe','login.action':'Se connecter','login.loading':'Connexion…','login.private':'Sécurisé, personnel et auto-hébergé.'
+  },
+  bn: {
+    'nav.notes':'নোট','nav.reminders':'রিমাইন্ডার','nav.labels':'লেবেল','nav.archive':'আর্কাইভ','nav.trash':'ট্র্যাশ','nav.settings':'সেটিংস','nav.createLabel':'লেবেল তৈরি','search':'নোট খুঁজুন','newNote':'একটি নোট লিখুন…','newChecklist':'নতুন চেকলিস্ট','pinned':'পিন করা','others':'অন্যান্য','untitled':'শিরোনামহীন নোট','restore':'ফিরিয়ে আনুন','deleteForever':'স্থায়ীভাবে মুছুন','pin':'পিন করুন','unpin':'পিন সরান','archive':'আর্কাইভ করুন','unarchive':'আর্কাইভ থেকে সরান','moveTrash':'ট্র্যাশে নিন','readMode':'পড়ার মোড','edit':'সম্পাদনা','close':'বন্ধ','editor.new':'নতুন নোট','editor.edit':'নোট সম্পাদনা','editor.title':'শিরোনাম','editor.item':'তালিকার আইটেম','editor.addItem':'আইটেম যোগ করুন','editor.reminder':'রিমাইন্ডার','editor.labels':'লেবেল','editor.attachment':'ফাইল যোগ করুন','status.saved':'সংরক্ষিত','status.saving':'সংরক্ষণ হচ্ছে…','status.offline':'অফলাইন','settings.language':'ভাষা','settings.languageHelp':'ইন্টারফেস ও তারিখের ধরন','login.welcome':'আবার স্বাগতম','login.title':'আপনার নোটে ফিরুন','login.description':'চালিয়ে যেতে Suur অ্যাকাউন্টে সাইন ইন করুন।','login.username':'ব্যবহারকারীর নাম','login.password':'পাসওয়ার্ড','login.action':'সাইন ইন','login.loading':'সাইন ইন হচ্ছে…','login.private':'নিরাপদ, ব্যক্তিগত ও স্ব-হোস্টেড।'
+  },
+  pt: {
+    'nav.notes':'Notas','nav.reminders':'Lembretes','nav.labels':'Marcadores','nav.archive':'Arquivo','nav.trash':'Lixeira','nav.settings':'Configurações','nav.createLabel':'Criar marcador','search':'Pesquisar notas','newNote':'Escreva uma nota…','newChecklist':'Nova lista','pinned':'FIXADAS','others':'OUTRAS','untitled':'Nota sem título','restore':'Restaurar','deleteForever':'Excluir para sempre','pin':'Fixar','unpin':'Desafixar','archive':'Arquivar','unarchive':'Desarquivar','moveTrash':'Mover para lixeira','readMode':'MODO DE LEITURA','edit':'Editar','close':'Fechar','editor.new':'NOVA NOTA','editor.edit':'EDITAR NOTA','editor.title':'Título','editor.item':'Item da lista','editor.addItem':'Adicionar item','editor.reminder':'Lembrete','editor.labels':'Marcadores','editor.attachment':'Adicionar arquivo','status.saved':'Salvo','status.saving':'Salvando…','status.offline':'Offline','settings.language':'Idioma','settings.languageHelp':'Interface e formato de data','login.welcome':'BEM-VINDO DE VOLTA','login.title':'Volte às suas notas','login.description':'Entre com sua conta Suur para continuar.','login.username':'Usuário','login.password':'Senha','login.action':'Entrar','login.loading':'Entrando…','login.private':'Seguro, pessoal e auto-hospedado.'
+  },
+  ru: {
+    'nav.notes':'Заметки','nav.reminders':'Напоминания','nav.labels':'Ярлыки','nav.archive':'Архив','nav.trash':'Корзина','nav.settings':'Настройки','nav.createLabel':'Создать ярлык','search':'Поиск заметок','newNote':'Новая заметка…','newChecklist':'Новый список','pinned':'ЗАКРЕПЛЕННЫЕ','others':'ДРУГИЕ','untitled':'Заметка без названия','restore':'Восстановить','deleteForever':'Удалить навсегда','pin':'Закрепить','unpin':'Открепить','archive':'В архив','unarchive':'Вернуть из архива','moveTrash':'В корзину','readMode':'РЕЖИМ ЧТЕНИЯ','edit':'Изменить','close':'Закрыть','editor.new':'НОВАЯ ЗАМЕТКА','editor.edit':'ИЗМЕНИТЬ ЗАМЕТКУ','editor.title':'Заголовок','editor.item':'Пункт списка','editor.addItem':'Добавить пункт','editor.reminder':'Напоминание','editor.labels':'Ярлыки','editor.attachment':'Добавить файл','status.saved':'Сохранено','status.saving':'Сохранение…','status.offline':'Нет сети','settings.language':'Язык','settings.languageHelp':'Интерфейс и формат даты','login.welcome':'С ВОЗВРАЩЕНИЕМ','login.title':'Вернитесь к заметкам','login.description':'Войдите в аккаунт Suur, чтобы продолжить.','login.username':'Имя пользователя','login.password':'Пароль','login.action':'Войти','login.loading':'Вход…','login.private':'Безопасно, лично и на своём сервере.'
+  },
+};
+
+// Keep the most visible navigation and authentication feedback complete in
+// every supported language, even while less common copy falls back to English.
+const localeOverrides: Record<Locale, Messages> = {
+  en: {},
+  tr: {},
+  zh: { 'nav.calendar': '日历', 'status.synced': '已同步', 'status.syncing': '同步中', 'login.invalid': '用户名或密码不正确。', 'login.failed': '无法完成登录。', 'login.showPassword': '显示密码', 'login.hidePassword': '隐藏密码' },
+  hi: { 'nav.calendar': 'कैलेंडर', 'status.synced': 'सिंक हुआ', 'status.syncing': 'सिंक हो रहा है', 'login.invalid': 'उपयोगकर्ता नाम या पासवर्ड गलत है।', 'login.failed': 'साइन इन पूरा नहीं हो सका।', 'login.showPassword': 'पासवर्ड दिखाएँ', 'login.hidePassword': 'पासवर्ड छिपाएँ' },
+  es: { 'nav.calendar': 'Calendario', 'status.synced': 'Sincronizado', 'status.syncing': 'Sincronizando', 'login.invalid': 'El usuario o la contraseña son incorrectos.', 'login.failed': 'No se pudo iniciar sesión.', 'login.showPassword': 'Mostrar contraseña', 'login.hidePassword': 'Ocultar contraseña' },
+  ar: { 'nav.calendar': 'التقويم', 'status.synced': 'تمت المزامنة', 'status.syncing': 'جارٍ المزامنة', 'login.invalid': 'اسم المستخدم أو كلمة المرور غير صحيحة.', 'login.failed': 'تعذر إكمال تسجيل الدخول.', 'login.showPassword': 'إظهار كلمة المرور', 'login.hidePassword': 'إخفاء كلمة المرور' },
+  fr: { 'nav.calendar': 'Calendrier', 'status.synced': 'Synchronisé', 'status.syncing': 'Synchronisation', 'login.invalid': 'Le nom d’utilisateur ou le mot de passe est incorrect.', 'login.failed': 'La connexion n’a pas pu être effectuée.', 'login.showPassword': 'Afficher le mot de passe', 'login.hidePassword': 'Masquer le mot de passe' },
+  bn: { 'nav.calendar': 'ক্যালেন্ডার', 'status.synced': 'সিঙ্ক হয়েছে', 'status.syncing': 'সিঙ্ক হচ্ছে', 'login.invalid': 'ব্যবহারকারীর নাম বা পাসওয়ার্ড ভুল।', 'login.failed': 'সাইন ইন সম্পন্ন করা যায়নি।', 'login.showPassword': 'পাসওয়ার্ড দেখান', 'login.hidePassword': 'পাসওয়ার্ড লুকান' },
+  pt: { 'nav.calendar': 'Calendário', 'status.synced': 'Sincronizado', 'status.syncing': 'Sincronizando', 'login.invalid': 'O usuário ou a senha estão incorretos.', 'login.failed': 'Não foi possível entrar.', 'login.showPassword': 'Mostrar senha', 'login.hidePassword': 'Ocultar senha' },
+  ru: { 'nav.calendar': 'Календарь', 'status.synced': 'Синхронизировано', 'status.syncing': 'Синхронизация', 'login.invalid': 'Неверное имя пользователя или пароль.', 'login.failed': 'Не удалось выполнить вход.', 'login.showPassword': 'Показать пароль', 'login.hidePassword': 'Скрыть пароль' },
+};
+
+export function normalizeLocale(value?: string | null): Locale {
+  const short = value?.toLowerCase().split(/[-_]/)[0] as Locale | undefined;
+  return short && languages.some((language) => language.value === short) ? short : 'en';
+}
+
+export function translate(locale: Locale, key: MessageKey, values?: Record<string, string | number>) {
+  let message = localeOverrides[locale][key] || translations[locale][key] || en[key];
+  for (const [name, value] of Object.entries(values || {})) message = message.replaceAll(`{${name}}`, String(value));
+  return message;
+}
+
+export function languageDirection(locale: Locale) {
+  return languages.find((language) => language.value === locale)?.dir || 'ltr';
+}

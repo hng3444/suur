@@ -1,0 +1,73 @@
+name: suur
+
+services:
+  suur:
+    image: ghcr.io/hng3444/suur:latest
+    container_name: suur
+    network_mode: bridge
+    restart: unless-stopped
+    ports:
+      - target: 3000
+        published: "3721"
+        protocol: tcp
+    environment:
+      DATA_DIR: /data
+      MAX_UPLOAD_MB: "25"
+      SUUR_PUBLIC_URL: http://localhost:3721
+      SUUR_DEFAULT_USERNAME: alaferoce
+      SUUR_DEFAULT_PASSWORD: 7Admin7
+      SUUR_FORCE_DEFAULT_PASSWORD_CHANGE: "true"
+      SUUR_MAINTENANCE_INTERVAL_MINUTES: "60"
+      SUUR_TRUST_PROXY: "false"
+      SUUR_NOTE_HISTORY_LIMIT: "100"
+      SUUR_MAX_NOTES_PER_USER: "50000"
+      NEXT_TELEMETRY_DISABLED: "1"
+    volumes:
+      - type: bind
+        source: /DATA/AppData/suur/data
+        target: /data
+    x-casaos:
+      ports:
+        - container: "3000"
+          description:
+            en_US: Suur Web UI port
+            tr_TR: Suur Web arayüzü portu
+      volumes:
+        - container: /data
+          description:
+            en_US: Persistent notes, accounts, uploads, settings, and backups
+            tr_TR: Kalıcı notlar, hesaplar, yüklemeler, ayarlar ve yedekler
+      envs:
+        - container: SUUR_PUBLIC_URL
+          description:
+            en_US: Public URL used for secure cookies and shared links
+            tr_TR: Güvenli çerezler ve paylaşım bağlantıları için dış adres
+
+x-casaos:
+  id: io.github.hng3444.suur
+  main: suur
+  index: /
+  port_map: "3721"
+  scheme: http
+  icon: https://cdn.jsdelivr.net/gh/hng3444/suur@main/public/icon-512.png
+  title:
+    en_US: Suur
+    tr_TR: Suur
+  tagline:
+    en_US: Fast, private, self-hosted notes that work offline.
+    tr_TR: Hızlı, özel, çevrimdışı çalışan self-hosted notlar.
+  description:
+    en_US: Suur is a multilingual, offline-first note-taking app with Docker, SQLite, PWA installation, reminders, Markdown, backups, attachments, and multi-user support.
+    tr_TR: Suur; Docker, SQLite, PWA, hatırlatıcılar, Markdown, yedekler, ek dosyalar ve çoklu kullanıcı desteği sunan çevrimdışı öncelikli bir not uygulamasıdır.
+  category: Productivity
+  author: Suur contributors
+  developer: Suur contributors
+  architectures:
+    - amd64
+    - arm64
+  version: "0.2.0"
+  update_at: "2026-08-30"
+  website: https://github.com/hng3444/suur
+  repo: https://github.com/hng3444/suur
+  support: https://github.com/hng3444/suur/issues
+  docs: https://github.com/hng3444/suur#readme

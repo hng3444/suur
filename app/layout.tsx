@@ -5,8 +5,9 @@ const publicUrl = process.env.SUUR_PUBLIC_URL || 'http://localhost:3000';
 
 export const metadata: Metadata = {
   metadataBase: new URL(publicUrl),
-  title: 'Suur — Notların seninle',
-  description: 'Hızlı, sade ve self-hosted not alma uygulaması.',
+  title: 'Suur — Private, self-hosted notes that work offline',
+  description: 'A fast, multilingual, offline-first note-taking app you can self-host with Docker, SQLite, and full data ownership.',
+  keywords: ['self-hosted notes', 'offline notes app', 'open source note taking', 'Docker notes app', 'CasaOS notes', 'Google Keep alternative', 'private notes', 'PWA notes'],
   applicationName: 'Suur',
   manifest: '/manifest.webmanifest',
   icons: {
@@ -19,15 +20,15 @@ export const metadata: Metadata = {
   },
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Suur' },
   openGraph: {
-    title: 'Suur — Notların seninle',
-    description: 'Hızlı, sade ve self-hosted not alma uygulaması.',
+    title: 'Suur — Private, self-hosted notes that work offline',
+    description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.',
     type: 'website',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Suur — Notların seninle' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Suur self-hosted notes app' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Suur — Notların seninle',
-    description: 'Hızlı, sade ve self-hosted not alma uygulaması.',
+    title: 'Suur — Private, self-hosted notes that work offline',
+    description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.',
     images: ['/og.png'],
   },
   robots: { index: false, follow: false },

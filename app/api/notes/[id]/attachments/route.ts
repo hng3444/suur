@@ -4,21 +4,15 @@ import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { handleApiError, jsonError, requireApiUser, unauthorized } from '@/lib/api';
 import { uploadsDirectory } from '@/lib/db';
-import { addAttachment, getNote } from '@/lib/repository';
+import { findUserById } from '@/lib/auth';
+import { addAttachment, getNote, storageUsage } from '@/lib/repository';
 import { idParamSchema } from '@/lib/validation';
+import { attachmentMimeExtensions } from '@/lib/attachment-policy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type Context = { params: Promise<{ id: string }> };
-
-const mimeExtensions: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-  'image/avif': '.avif',
-};
 
 export async function POST(request: Request, context: Context) {
   let storedPath: string | null = null;
@@ -26,21 +20,25 @@ export async function POST(request: Request, context: Context) {
     const user = await requireApiUser();
     if (!user) return unauthorized();
     const noteId = idParamSchema.parse((await context.params).id);
-    if (!getNote(noteId, user.id)) return jsonError('Not bulunamadı.', 404);
+    const note = getNote(noteId, user.id);
+    if (!note) return jsonError('Not bulunamadı.', 404);
 
     const form = await request.formData();
     const file = form.get('file');
-    if (!(file instanceof File)) return jsonError('Bir görsel seçin.', 400);
-    const extension = mimeExtensions[file.type];
-    if (!extension) return jsonError('Yalnızca JPEG, PNG, GIF, WebP ve AVIF görselleri desteklenir.', 415);
-    const maxBytes = Number(process.env.MAX_UPLOAD_MB || 10) * 1024 * 1024;
-    if (file.size < 1 || file.size > maxBytes) return jsonError(`Görsel en fazla ${process.env.MAX_UPLOAD_MB || 10} MB olabilir.`, 413);
+    if (!(file instanceof File)) return jsonError('Bir dosya seçin.', 400);
+    const extension = attachmentMimeExtensions[file.type];
+    if (!extension) return jsonError('Bu dosya türü desteklenmiyor.', 415);
+    const maxBytes = Number(process.env.MAX_UPLOAD_MB || 25) * 1024 * 1024;
+    if (file.size < 1 || file.size > maxBytes) return jsonError(`Dosya en fazla ${process.env.MAX_UPLOAD_MB || 25} MB olabilir.`, 413);
+    const owner = findUserById(note.ownerId);
+    const quotaBytes = (owner?.storage_quota_mb || 512) * 1024 * 1024;
+    if (storageUsage(note.ownerId) + file.size > quotaBytes) return jsonError('Kullanıcının depolama kotası dolu.', 413);
 
     const id = randomUUID();
     const storedName = `${id}${extension}`;
     storedPath = path.join(/* turbopackIgnore: true */ uploadsDirectory(), storedName);
     await writeFile(storedPath, Buffer.from(await file.arrayBuffer()), { flag: 'wx' });
-    const filename = path.basename(file.name).replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 180) || `gorsel${extension}`;
+    const filename = path.basename(file.name).replace(/[^\p{L}\p{N}._ -]/gu, '_').slice(0, 180) || `dosya${extension}`;
     const attachment = addAttachment({
       id,
       note_id: noteId,

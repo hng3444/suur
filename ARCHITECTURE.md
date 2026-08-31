@@ -1,49 +1,78 @@
-# Suur mimarisi
+# Suur architecture
 
-Suur ilk sürümde tek container içinde çalışan modüler bir monolit olarak tasarlandı. Bu seçim kurulum, güncelleme ve yedeklemeyi basit tutarken frontend ile REST API arasında gereksiz ağ katmanları oluşturmaz.
+Suur is a modular monolith packaged as one container. This keeps installation, maintenance, backup, and upgrades straightforward while avoiding an unnecessary network boundary between the web UI and REST API.
 
-## Çalışma akışı
+## Request and data flow
 
-1. Next.js arayüzü tarayıcıda çalışır ve `/api/*` REST uçlarını kullanır.
-2. API istekleri Zod ile doğrulanır; not güncellemeleri sürüm numarasıyla çakışmalara karşı korunur.
-3. `better-sqlite3`, `/data/suur.db` dosyasını WAL modunda kullanır.
-4. Görseller `/data/uploads` altında, ilişkili meta veriler SQLite içinde saklanır.
-5. Service worker uygulama kabuğunu ve son başarılı GET yanıtlarını önbellekler.
-6. IndexedDB, çevrimdışı not değişikliklerini işlem kimliğiyle sıraya alır. Bağlantı geldiğinde istekler idempotent şekilde yeniden oynatılır. Eşzamanlı düzenleme çakışırsa içerik ayrı bir “çakışan kopya” olarak korunur.
+1. The Next.js client calls authenticated `/api/*` route handlers.
+2. Zod validates request bodies, query values, identifiers, settings, and user input.
+3. The repository layer performs authorization-aware SQLite operations.
+4. `better-sqlite3` stores structured data in `/data/suur.db` using WAL mode.
+5. Uploaded files live below `/data/uploads`; their ownership and metadata stay in SQLite.
+6. A private service-worker cache stores the authenticated application shell and static assets.
+7. A per-user IndexedDB database caches notes and queues offline mutations.
+8. Reconnection replays idempotent mutations. Version conflicts preserve the client content as a separate conflict copy.
 
-## Klasör yapısı
+## Main directories
 
 ```text
 app/
-  api/                 REST API route'ları
-  globals.css          Tema ve responsive tasarım
-  layout.tsx           PWA/SEO metadata
-  page.tsx             Ana uygulama girişi
+  api/                    REST route handlers
+  share/[token]/          public read-only note page
+  globals.css             design system and responsive layouts
+  layout.tsx              PWA and metadata configuration
 components/
-  suur-app.tsx         Uygulama durumu ve senkronizasyon
-  note-card.tsx        Grid/liste not kartı
-  note-editor.tsx      Not ve checklist editörü
+  suur-app.tsx            application state, sync, filters, bulk actions
+  note-card.tsx           grid/list card and selection behavior
+  note-editor.tsx         autosaving editor, attachments, audio, Markdown
+  note-viewer.tsx         read mode, history, sharing, duplication
+  calendar-view.tsx       reminder calendar
 lib/
-  db.ts                SQLite bağlantısı ve şema
-  repository.ts        Veri erişim katmanı
-  validation.ts        Girdi doğrulama
-  offline.ts           IndexedDB önbellek ve işlem kuyruğu
+  auth.ts                 scrypt passwords and session management
+  db.ts                   SQLite setup and additive migrations
+  repository.ts           authorized data-access layer
+  portable.ts             export, import, backup, and restore
+  validation.ts           Zod schemas
+  offline.ts              IndexedDB cache and mutation queue
+  i18n.ts                 ten-language message catalog
 public/
-  manifest.webmanifest PWA bildirimi
-  sw.js                Offline service worker
-Dockerfile             Çok aşamalı production imajı
-compose.yml            Kalıcı volume ve healthcheck
+  sw.js                   private offline shell and asset caching
+  manifest.webmanifest    installable PWA manifest
+casaos/
+  docker-compose.yml      CasaOS App Store source manifest
 ```
 
-## Kalıcı veri
+## Persistent storage
 
-Tüm kullanıcı verisi yalnızca `/data` altındadır:
+Everything that must survive a container replacement is below `/data`:
 
 ```text
 /data/suur.db
 /data/suur.db-wal
 /data/suur.db-shm
 /data/uploads/*
+/data/backups/<user-id>/*
 ```
 
-Compose varsayılan olarak bu dizini `suur-data` adlı Docker volume’una bağlar. Container veya imaj yeniden oluşturulduğunda volume korunur.
+Docker Compose mounts this directory from `suur-data` by default. CasaOS uses `/DATA/AppData/suur/data:/data`.
+
+## Offline synchronization
+
+The service worker caches a successful authenticated navigation under a private synthetic key. It never places note-list API responses in a shared HTTP cache. Structured note data is stored in a user-namespaced IndexedDB database instead.
+
+Offline create, patch, reorder, and delete operations receive unique mutation IDs. The server records processed IDs for 30 days, making reconnect retries idempotent. Note updates include a base version. If another device changed the same note, Suur creates a conflict copy instead of silently overwriting client content.
+
+Signing out deletes the private service-worker cache and the current user's IndexedDB database from that browser.
+
+## Backup model
+
+A portable Suur backup is a ZIP archive containing `manifest.json` and attachment bytes. Import is non-destructive: notes and attachment IDs are regenerated and labels are matched by name. Automatic daily or weekly backups are checked by the server-side maintenance scheduler and retain the latest 14 archives per user.
+
+## Security boundaries
+
+- The server is authoritative for authentication, ownership, assignment, quotas, and validation.
+- Assigned users may edit an assigned note; only its owner can permanently delete or publish it.
+- Public sharing uses a random opaque token whose SHA-256 hash is stored in SQLite.
+- Markdown is rendered as React elements without injecting raw HTML.
+- Attachment MIME types, file sizes, filenames, ownership, and per-user quotas are checked server-side.
+- Private instance pages opt out of search indexing even though the public project documentation is search-friendly.

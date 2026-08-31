@@ -15,6 +15,9 @@ export function handleApiError(error: unknown) {
   if (error instanceof Error && error.message.includes('UNIQUE constraint failed: users.username')) {
     return jsonError('Bu kullanıcı adı zaten kullanılıyor.', 409);
   }
+  if (error instanceof Error && error.message === 'NOTE_LIMIT_REACHED') {
+    return jsonError('Kullanıcı için izin verilen azami not sayısına ulaşıldı.', 413);
+  }
   console.error(error);
   return jsonError('Beklenmeyen bir sunucu hatası oluştu.', 500);
 }
@@ -24,8 +27,10 @@ export function mutationId(request: Request) {
   return value && /^[a-zA-Z0-9_-]{1,100}$/.test(value) ? value : null;
 }
 
-export async function requireApiUser() {
-  return getCurrentUser();
+export async function requireApiUser(options: { allowPasswordChange?: boolean } = {}) {
+  const user = await getCurrentUser();
+  if (user?.mustChangePassword && !options.allowPasswordChange) return null;
+  return user;
 }
 
 export function unauthorized() {

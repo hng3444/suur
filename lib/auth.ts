@@ -1,6 +1,6 @@
 import 'server-only';
 import { cookies } from 'next/headers';
-import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { getDb } from '@/lib/db';
 import type { User, UserRole } from '@/lib/types';
 
@@ -14,6 +14,8 @@ interface UserRow {
   password_hash: string;
   role: UserRole;
   avatar_stored_name: string | null;
+  storage_quota_mb: number;
+  must_change_password: number;
   created_at: string;
   updated_at: string;
 }
@@ -28,13 +30,15 @@ export function hashPassword(password: string) {
   return `scrypt$16384$8$1$${salt.toString('hex')}$${derived.toString('hex')}`;
 }
 
-export function verifyPassword(password: string, encoded: string) {
+export async function verifyPassword(password: string, encoded: string) {
   try {
     const [algorithm, n, r, p, saltHex, hashHex] = encoded.split('$');
     if (algorithm !== 'scrypt' || !saltHex || !hashHex) return false;
     const expected = Buffer.from(hashHex, 'hex');
-    const actual = scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length, {
-      N: Number(n), r: Number(r), p: Number(p), maxmem: 64 * 1024 * 1024,
+    const actual = await new Promise<Buffer>((resolve, reject) => {
+      scrypt(password, Buffer.from(saltHex, 'hex'), expected.length, {
+        N: Number(n), r: Number(r), p: Number(p), maxmem: 64 * 1024 * 1024,
+      }, (error, key) => error ? reject(error) : resolve(key));
     });
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   } catch {
@@ -49,6 +53,8 @@ export function toUser(row: UserRow): User {
     displayName: row.display_name,
     role: row.role,
     avatarUrl: row.avatar_stored_name ? `/api/users/${row.id}/avatar?v=${encodeURIComponent(row.updated_at)}` : null,
+    storageQuotaMb: row.storage_quota_mb,
+    mustChangePassword: Boolean(row.must_change_password),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -97,13 +103,13 @@ export async function getCurrentUser() {
   return row ? toUser(row) : null;
 }
 
-export function createUser(input: { username: string; displayName: string; password: string; role: UserRole }) {
+export function createUser(input: { username: string; displayName: string; password: string; role: UserRole; storageQuotaMb: number }) {
   const id = randomUUID();
   const timestamp = new Date().toISOString();
   getDb().prepare(`
-    INSERT INTO users (id, username, display_name, password_hash, role, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.username, input.displayName, hashPassword(input.password), input.role, timestamp, timestamp);
+    INSERT INTO users (id, username, display_name, password_hash, role, storage_quota_mb, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, input.username, input.displayName, hashPassword(input.password), input.role, input.storageQuotaMb, timestamp, timestamp);
   return toUser(findUserById(id)!);
 }
 
@@ -113,7 +119,7 @@ export function listUsers() {
   `).all() as UserRow[]).map(toUser);
 }
 
-export function updateUser(id: string, input: { username?: string; displayName?: string; password?: string; role?: UserRole; avatarStoredName?: string | null }) {
+export function updateUser(id: string, input: { username?: string; displayName?: string; password?: string; role?: UserRole; avatarStoredName?: string | null; storageQuotaMb?: number }) {
   const assignments: string[] = [];
   const values: unknown[] = [];
   const mapping: Array<[keyof typeof input, string, (value: unknown) => unknown]> = [
@@ -122,10 +128,12 @@ export function updateUser(id: string, input: { username?: string; displayName?:
     ['password', 'password_hash', (value) => hashPassword(String(value))],
     ['role', 'role', (value) => value],
     ['avatarStoredName', 'avatar_stored_name', (value) => value],
+    ['storageQuotaMb', 'storage_quota_mb', (value) => value],
   ];
   for (const [key, column, transform] of mapping) {
     if (input[key] !== undefined) { assignments.push(`${column} = ?`); values.push(transform(input[key])); }
   }
+  if (input.password !== undefined) assignments.push('must_change_password = 0');
   if (!assignments.length) return findUserById(id) ? toUser(findUserById(id)!) : null;
   assignments.push('updated_at = ?');
   values.push(new Date().toISOString(), id);

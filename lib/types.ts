@@ -28,8 +28,11 @@ export interface Attachment {
 
 export interface Note {
   id: string;
+  ownerId: string;
+  assignedUserId: string | null;
   title: string;
   content: string;
+  contentFormat: 'plain' | 'markdown';
   type: NoteType;
   items: ChecklistItem[];
   color: NoteColor;
@@ -49,7 +52,15 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   view: 'grid' | 'list';
   sidebarCollapsed: boolean;
+  locale: Locale;
+  accent: 'forest' | 'emerald' | 'teal' | 'blue' | 'violet' | 'amber';
+  notificationsEnabled: boolean;
+  backupFrequency: 'off' | 'daily' | 'weekly';
+  trashRetentionDays: number;
+  completedItemsBottom: boolean;
 }
+
+export type Locale = 'en' | 'zh' | 'hi' | 'es' | 'ar' | 'fr' | 'bn' | 'pt' | 'ru' | 'tr';
 
 export type UserRole = 'superadmin' | 'admin' | 'user';
 
@@ -59,8 +70,12 @@ export interface User {
   displayName: string;
   role: UserRole;
   avatarUrl: string | null;
+  storageQuotaMb: number;
+  mustChangePassword: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export type NoteView = 'notes' | 'reminders' | 'archive' | 'trash';
+export type UserSummary = Pick<User, 'id' | 'username' | 'displayName' | 'avatarUrl'>;
+
+export type NoteView = 'notes' | 'reminders' | 'calendar' | 'archive' | 'trash';

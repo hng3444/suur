@@ -5,9 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   Bell,
+  CalendarDays,
+  CheckSquare,
   Cloud,
   CloudOff,
   Grid2X2,
+  Filter,
+  LayoutTemplate,
   Lightbulb,
   List,
   Menu,
@@ -21,20 +25,39 @@ import {
   X,
 } from 'lucide-react';
 import { NoteCard } from '@/components/note-card';
+import { CalendarView } from '@/components/calendar-view';
+import { BulkToolbar, NoteFilterPanel, TemplateMenu } from '@/components/note-controls';
 import { NoteEditor } from '@/components/note-editor';
 import { NoteViewer } from '@/components/note-viewer';
 import { SettingsCenter } from '@/components/settings-center';
+import { ConfirmDialog, ShareDialog } from '@/components/app-dialogs';
 import { enqueue, getCache, queuedOperations, removeQueuedOperation, setCache, setOfflineNamespace, type QueuedOperation } from '@/lib/offline';
-import type { AppSettings, Label, Note, NoteView, User } from '@/lib/types';
+import { languageDirection, translate } from '@/lib/i18n';
+import { hasActiveFilters } from '@/lib/client-utils';
+import { syncDecision } from '@/lib/sync-policy';
+import type { AppSettings, Label, Note, NoteView, User, UserSummary } from '@/lib/types';
 
-const initialSettings: AppSettings = { theme: 'system', view: 'grid', sidebarCollapsed: false };
+const initialSettings: AppSettings = {
+  theme: 'system',
+  view: 'grid',
+  sidebarCollapsed: false,
+  locale: 'tr',
+  accent: 'forest',
+  notificationsEnabled: false,
+  backupFrequency: 'off',
+  trashRetentionDays: 30,
+  completedItemsBottom: true,
+};
 
-function createDraft(): Note {
+function createDraft(ownerId = ''): Note {
   const timestamp = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
+    ownerId,
+    assignedUserId: null,
     title: '',
     content: '',
+    contentFormat: 'plain',
     type: 'text',
     items: [],
     color: 'default',
@@ -55,6 +78,7 @@ function notePayload(note: Note) {
   return {
     title: note.title,
     content: note.content,
+    contentFormat: note.contentFormat,
     type: note.type,
     items: note.items,
     color: note.color,
@@ -64,6 +88,7 @@ function notePayload(note: Note) {
     reminderAt: note.reminderAt,
     position: note.position,
     labelIds: note.labels.map((label) => label.id),
+    assignedUserId: note.assignedUserId,
   };
 }
 
@@ -80,12 +105,13 @@ async function rawOperation(operation: QueuedOperation) {
   return { response, data };
 }
 
-function viewTitle(view: NoteView, activeLabel: Label | null) {
+function viewTitle(view: NoteView, activeLabel: Label | null, locale: AppSettings['locale']) {
   if (activeLabel) return activeLabel.name;
-  if (view === 'reminders') return 'Hatırlatıcılar';
-  if (view === 'archive') return 'Arşiv';
-  if (view === 'trash') return 'Çöp kutusu';
-  return 'Notlar';
+  if (view === 'reminders') return translate(locale, 'nav.reminders');
+  if (view === 'archive') return translate(locale, 'nav.archive');
+  if (view === 'trash') return translate(locale, 'nav.trash');
+  if (view === 'calendar') return translate(locale, 'nav.calendar');
+  return translate(locale, 'nav.notes');
 }
 
 export function SuurApp({ initialUser }: { initialUser: User }) {
@@ -93,6 +119,7 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   const [currentUser, setCurrentUser] = useState(initialUser);
   const [notes, setNotes] = useState<Note[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
+  const [directoryUsers, setDirectoryUsers] = useState<UserSummary[]>([]);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [view, setView] = useState<NoteView>('notes');
   const [activeLabel, setActiveLabel] = useState<Label | null>(null);
@@ -100,19 +127,36 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncIssue, setSyncIssue] = useState<'auth' | 'invalid' | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [compactNavigation, setCompactNavigation] = useState(false);
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(initialUser.mustChangePassword);
   const [newLabelName, setNewLabelName] = useState('');
   const [editorNote, setEditorNote] = useState<Note | null>(null);
   const [viewerNote, setViewerNote] = useState<Note | null>(null);
   const [saveStatus, setSaveStatus] = useState('Kaydedildi');
   const [toast, setToast] = useState('');
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionEnabled, setSelectionEnabled] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [filters, setFilters] = useState({ color: 'all', label: 'all', date: 'all', reminder: 'all' });
+  const [filterEpoch, setFilterEpoch] = useState(0);
+  const [confirmation, setConfirmation] = useState<{ title: string; message: string; destructive?: boolean; action: () => void | Promise<void> } | null>(null);
+  const [shareUrl, setShareUrl] = useState('');
+  const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(settings.locale, key, values);
+  const ui = (turkish: string, english: string) => settings.locale === 'tr' ? turkish : english;
 
   const editorRef = useRef<Note | null>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const syncingRef = useRef(false);
+  const syncPausedRef = useRef(false);
+  const hydratedCacheKeyRef = useRef<string | null>(null);
+  const notesLoadSequenceRef = useRef(0);
 
   const cacheKey = `notes:${view}:${activeLabel?.id || 'all'}`;
 
@@ -138,25 +182,33 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     setViewerNote((current) => current?.id === serverNote.id ? serverNote : current);
   }, []);
 
-  const createConflictCopy = useCallback(async (operation: QueuedOperation) => {
-    const original = (operation.body || {}) as Record<string, unknown>;
-    const body: Record<string, unknown> = { ...original, id: crypto.randomUUID(), baseVersion: undefined };
-    body.title = `${String(original.title || 'Başlıksız not')} (çakışan kopya)`;
-    const conflictOperation: QueuedOperation = {
+  const retryVersionConflict = useCallback(async (operation: QueuedOperation, data: unknown) => {
+    if (operation.method !== 'PATCH' || !operation.url.match(/^\/api\/notes\/[^/]+$/)) return null;
+    const serverNote = (data as { note?: Note })?.note;
+    if (!serverNote || !operation.body || typeof operation.body !== 'object' || Array.isArray(operation.body)) return null;
+    const rebased: QueuedOperation = {
+      ...operation,
+      id: crypto.randomUUID(),
+      body: { ...(operation.body as Record<string, unknown>), baseVersion: serverNote.version },
+      createdAt: new Date().toISOString(),
+    };
+    return { ...(await rawOperation(rebased)), operation: rebased };
+  }, []);
+
+  const recoverMissingNote = useCallback(async (operation: QueuedOperation) => {
+    const match = operation.method === 'PATCH' ? operation.url.match(/^\/api\/notes\/([^/]+)$/) : null;
+    if (!match || !operation.body || typeof operation.body !== 'object' || Array.isArray(operation.body)) return null;
+    const body: Record<string, unknown> = { ...(operation.body as Record<string, unknown>), id: decodeURIComponent(match[1]) };
+    delete body.baseVersion;
+    const recovery: QueuedOperation = {
       id: crypto.randomUUID(),
       method: 'POST',
       url: '/api/notes',
       body,
       createdAt: new Date().toISOString(),
     };
-    try {
-      const { response } = await rawOperation(conflictOperation);
-      if (!response.ok) throw new Error('Kopya oluşturulamadı.');
-    } catch {
-      await enqueue(conflictOperation);
-    }
-    showToast('Aynı not başka bir yerde değişti; içeriğin çakışan kopya olarak korundu.');
-  }, [showToast]);
+    return { ...(await rawOperation(recovery)), operation: recovery };
+  }, []);
 
   const dispatchOperation = useCallback(async (operation: QueuedOperation) => {
     if (!navigator.onLine) {
@@ -165,19 +217,30 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
       return null;
     }
     try {
-      const { response, data } = await rawOperation(operation);
-      if (response.status === 409 && operation.url.startsWith('/api/notes/')) {
-        await createConflictCopy(operation);
-        return null;
+      let { response, data } = await rawOperation(operation);
+      if (operation.method === 'DELETE' && response.status === 404) return { deleted: true };
+      if (operation.method === 'PATCH' && response.status === 404) {
+        const recovery = await recoverMissingNote(operation);
+        if (recovery) { response = recovery.response; data = recovery.data; }
+      }
+      let decision = syncDecision(response.status);
+      if (decision === 'conflict' && operation.url.startsWith('/api/notes/')) {
+        const retry = await retryVersionConflict(operation, data);
+        if (retry) {
+          response = retry.response;
+          data = retry.data;
+          decision = syncDecision(response.status);
+        }
       }
       if (!response.ok) {
-        if (response.status >= 500) {
-          await enqueue(operation);
-          setOffline(true);
-          return null;
-        }
-        throw new Error((data as { error?: string }).error || 'İşlem tamamlanamadı.');
+        await enqueue(operation);
+        if (decision === 'pause-auth') { syncPausedRef.current = true; setSyncIssue('auth'); }
+        else if (decision === 'pause-invalid') { syncPausedRef.current = true; setSyncIssue('invalid'); }
+        else setOffline(true);
+        showToast((data as { error?: string }).error || 'Değişiklik güvenli biçimde beklemeye alındı.');
+        return null;
       }
+      setSyncIssue(null);
       setOffline(false);
       return data as { note?: Note; deleted?: boolean; updated?: boolean };
     } catch (error) {
@@ -189,9 +252,12 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
       showToast(error instanceof Error ? error.message : 'İşlem tamamlanamadı.');
       return null;
     }
-  }, [createConflictCopy, showToast]);
+  }, [recoverMissingNote, retryVersionConflict, showToast]);
 
   const loadNotes = useCallback(async () => {
+    const sequence = ++notesLoadSequenceRef.current;
+    const requestedCacheKey = cacheKey;
+    hydratedCacheKeyRef.current = null;
     setLoading(true);
     const query = new URLSearchParams({ view });
     if (activeLabel) query.set('label', activeLabel.id);
@@ -199,49 +265,76 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
       const response = await fetch(`/api/notes?${query}`);
       if (!response.ok) throw new Error('Notlar alınamadı.');
       const data = await response.json() as { notes: Note[] };
+      if (sequence !== notesLoadSequenceRef.current) return;
+      hydratedCacheKeyRef.current = requestedCacheKey;
       setNotes(data.notes);
-      await setCache(cacheKey, data.notes);
+      await setCache(requestedCacheKey, data.notes);
       setOffline(false);
     } catch {
-      const cached = await getCache<Note[]>(cacheKey).catch(() => undefined);
+      const cached = await getCache<Note[]>(requestedCacheKey).catch(() => undefined);
+      if (sequence !== notesLoadSequenceRef.current) return;
+      hydratedCacheKeyRef.current = requestedCacheKey;
       if (cached) setNotes(cached);
       setOffline(true);
     } finally {
-      setLoading(false);
+      if (sequence === notesLoadSequenceRef.current) setLoading(false);
     }
   }, [activeLabel, cacheKey, view]);
 
-  const syncPending = useCallback(async () => {
-    if (!navigator.onLine || syncing) return;
+  const syncPending = useCallback(async (force = false) => {
+    if (!navigator.onLine || syncingRef.current || (syncPausedRef.current && !force)) return;
+    if (force) syncPausedRef.current = false;
+    syncingRef.current = true;
     setSyncing(true);
+    let completed = true;
+    let changed = false;
     try {
       for (const operation of await queuedOperations()) {
         try {
-          const { response } = await rawOperation(operation);
-          if (response.status === 409 && operation.url.startsWith('/api/notes/')) {
-            await createConflictCopy(operation);
-            await removeQueuedOperation(operation.id);
-            continue;
+          let { response, data } = await rawOperation(operation);
+          if (operation.method === 'DELETE' && response.status === 404) { await removeQueuedOperation(operation.id); changed = true; continue; }
+          if (operation.method === 'PATCH' && response.status === 404) {
+            const recovery = await recoverMissingNote(operation);
+            if (recovery) { response = recovery.response; data = recovery.data; }
+          }
+          let decision = syncDecision(response.status);
+          if (decision === 'conflict' && operation.url.startsWith('/api/notes/')) {
+            const retry = await retryVersionConflict(operation, data);
+            if (retry) {
+              response = retry.response;
+              data = retry.data;
+              decision = syncDecision(response.status);
+            }
           }
           if (!response.ok) {
-            if (response.status >= 500) break;
-            await removeQueuedOperation(operation.id);
-            continue;
+            completed = false;
+            if (decision === 'pause-auth') { syncPausedRef.current = true; setSyncIssue('auth'); }
+            else if (decision === 'pause-invalid') { syncPausedRef.current = true; setSyncIssue('invalid'); }
+            else setOffline(true);
+            break;
           }
           await removeQueuedOperation(operation.id);
+          changed = true;
+          const serverNote = (data as { note?: Note })?.note;
+          if (serverNote) mergeServerNote(serverNote);
+          setSyncIssue(null);
         } catch {
+          completed = false;
           setOffline(true);
           break;
         }
       }
-      if (navigator.onLine) {
+      if (completed && navigator.onLine) {
+        syncPausedRef.current = false;
+        setSyncIssue(null);
         setOffline(false);
-        await loadNotes();
+        if (changed) await loadNotes();
       }
     } finally {
+      syncingRef.current = false;
       setSyncing(false);
     }
-  }, [createConflictCopy, loadNotes, syncing]);
+  }, [loadNotes, mergeServerNote, recoverMissingNote, retryVersionConflict]);
 
   useEffect(() => {
     const task = window.setTimeout(() => void loadNotes(), 0);
@@ -251,13 +344,15 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   useEffect(() => {
     const loadSupportingData = async () => {
       try {
-        const [labelsResponse, settingsResponse] = await Promise.all([fetch('/api/labels'), fetch('/api/settings')]);
+        const [labelsResponse, settingsResponse, usersResponse] = await Promise.all([fetch('/api/labels'), fetch('/api/settings'), fetch('/api/users/directory')]);
         if (!labelsResponse.ok || !settingsResponse.ok) throw new Error();
         const labelsData = await labelsResponse.json() as { labels: Label[] };
         const settingsData = await settingsResponse.json() as { settings: AppSettings };
         setLabels(labelsData.labels);
         setSettings(settingsData.settings);
+        if (usersResponse.ok) setDirectoryUsers((await usersResponse.json() as { users: UserSummary[] }).users);
         await Promise.all([setCache('labels', labelsData.labels), setCache('settings', settingsData.settings)]);
+        void fetch('/api/maintenance', { method: 'POST' }).catch(() => undefined);
       } catch {
         const [cachedLabels, cachedSettings] = await Promise.all([
           getCache<Label[]>('labels').catch(() => undefined),
@@ -269,13 +364,26 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     };
     void loadSupportingData();
     const initialSync = window.setTimeout(() => void syncPending(), 0);
+    const retrySync = window.setInterval(() => {
+      void queuedOperations().then((operations) => {
+        if (operations.length && !syncPausedRef.current) void syncPending();
+      }).catch(() => undefined);
+    }, 12_000);
     const handleOnline = () => void syncPending();
     const handleOffline = () => setOffline(true);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('/sw.js').then(async () => {
+        const registration = await navigator.serviceWorker.ready;
+        registration.active?.postMessage({ type: 'CACHE_PRIVATE_SHELL', userId: initialUser.id });
+        const periodic = (registration as ServiceWorkerRegistration & { periodicSync?: { register: (tag: string, options: { minInterval: number }) => Promise<void> } }).periodicSync;
+        if (periodic) await periodic.register('suur-reminders', { minInterval: 15 * 60_000 }).catch(() => undefined);
+      }).catch(() => undefined);
+    }
     return () => {
       window.clearTimeout(initialSync);
+      window.clearInterval(retrySync);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -284,15 +392,68 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   }, []);
 
   useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const update = () => {
+      setCompactNavigation(media.matches);
+      if (!media.matches) setSidebarOpen(false);
+    };
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
     const resolved = settings.theme === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : settings.theme;
     document.documentElement.dataset.theme = resolved;
-  }, [settings.theme]);
+    document.documentElement.dataset.accent = settings.accent;
+    document.documentElement.lang = settings.locale;
+    document.documentElement.dir = languageDirection(settings.locale);
+    window.localStorage.setItem('suur-locale', settings.locale);
+  }, [settings.accent, settings.locale, settings.theme]);
 
   useEffect(() => {
-    void setCache(cacheKey, notes);
+    if (hydratedCacheKeyRef.current === cacheKey) void setCache(cacheKey, notes);
   }, [cacheKey, notes]);
+
+  useEffect(() => {
+    if (!settings.notificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return;
+    let cancelled = false;
+    const checkReminders = async () => {
+      let reminderNotes: Note[] | undefined;
+      try {
+        const response = await fetch('/api/notes?view=reminders');
+        if (response.ok) {
+          reminderNotes = (await response.json() as { notes: Note[] }).notes;
+          await setCache('notes:reminders:all', reminderNotes);
+        }
+      } catch {
+        reminderNotes = await getCache<Note[]>('notes:reminders:all').catch(() => undefined);
+      }
+      if (cancelled || !reminderNotes) return;
+      const now = Date.now();
+      const registration = await navigator.serviceWorker.ready;
+      for (const note of reminderNotes) {
+        if (!note.reminderAt) continue;
+        const due = new Date(note.reminderAt).getTime();
+        if (due > now || due < now - 86_400_000) continue;
+        const notificationKey = `notified:${note.id}:${note.reminderAt}`;
+        if (await getCache<boolean>(notificationKey).catch(() => false)) continue;
+        await registration.showNotification(note.title || translate(settings.locale, 'untitled'), {
+          body: note.type === 'checklist' ? note.items.filter((item) => !item.checked).slice(0, 3).map((item) => item.text).join(' · ') : note.content.slice(0, 180),
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: notificationKey,
+          data: { url: '/#reminders' },
+        });
+        await setCache(notificationKey, true);
+      }
+    };
+    void checkReminders();
+    const timer = window.setInterval(() => void checkReminders(), 30_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [settings.locale, settings.notificationsEnabled]);
 
   const persistSettings = async (patch: Partial<AppSettings>) => {
     const next = { ...settings, ...patch };
@@ -309,7 +470,7 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     const meaningful = current.title.trim() || current.content.trim() || current.items.some((item) => item.text.trim()) || current.attachments.length;
     if (!force && !meaningful) return;
 
-    setSaveStatus('Kaydediliyor…');
+    setSaveStatus(translate(settings.locale, 'status.saving'));
     const isNew = current.version === 0;
     const optimistic: Note = {
       ...current,
@@ -336,10 +497,10 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     saveChain.current = saveChain.current.then(async () => {
       const result = await dispatchOperation(operation);
       if (result?.note) mergeServerNote(result.note);
-      setSaveStatus(result ? 'Kaydedildi' : 'Çevrimdışı kaydedildi');
+      setSaveStatus(result ? translate(settings.locale, 'status.saved') : `${translate(settings.locale, 'status.offline')} · ${translate(settings.locale, 'status.saved')}`);
     });
     await saveChain.current;
-  }, [dispatchOperation, mergeServerNote]);
+  }, [dispatchOperation, mergeServerNote, settings.locale]);
 
   const changeEditor = (note: Note) => {
     editorRef.current = note;
@@ -374,7 +535,7 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   const openEditor = (note: Note) => {
     editorRef.current = note;
     setEditorNote(note);
-    setSaveStatus('Kaydedildi');
+    setSaveStatus(t('status.saved'));
   };
 
   const openViewer = (note: Note) => setViewerNote(note);
@@ -387,11 +548,30 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   };
 
   const newNote = (type: 'text' | 'checklist' = 'text') => {
-    const draft = createDraft();
+    const draft = createDraft(currentUser.id);
     if (type === 'checklist') {
       draft.type = 'checklist';
       draft.items = [{ id: crypto.randomUUID(), text: '', checked: false }];
     }
+    openEditor(draft);
+  };
+
+  const newFromTemplate = (template: 'shopping' | 'daily' | 'meeting' | 'idea') => {
+    const draft = createDraft(currentUser.id);
+    if (template === 'shopping') {
+      draft.title = ui('Alışveriş listesi', 'Shopping list'); draft.type = 'checklist';
+      draft.items = (settings.locale === 'tr' ? ['Meyve ve sebze', 'Temel ihtiyaçlar', 'Diğer'] : ['Fruit and vegetables', 'Essentials', 'Other']).map((text) => ({ id: crypto.randomUUID(), text, checked: false }));
+    } else if (template === 'daily') {
+      draft.title = ui('Günlük plan', 'Daily plan'); draft.type = 'checklist';
+      draft.items = (settings.locale === 'tr' ? ['Bugünün önceliği', 'Yapılacaklar', 'Günün notu'] : ['Today’s priority', 'To-do list', 'Notes for today']).map((text) => ({ id: crypto.randomUUID(), text, checked: false }));
+    } else if (template === 'meeting') {
+      draft.title = ui('Toplantı notu', 'Meeting notes'); draft.contentFormat = 'markdown';
+      draft.content = settings.locale === 'tr' ? '## Katılımcılar\n\n## Gündem\n\n## Kararlar\n\n## Aksiyonlar\n- [ ] ' : '## Attendees\n\n## Agenda\n\n## Decisions\n\n## Action items\n- [ ] ';
+    } else {
+      draft.title = ui('Yeni fikir', 'New idea'); draft.contentFormat = 'markdown';
+      draft.content = settings.locale === 'tr' ? '## Fikir\n\n## Neden değerli?\n\n## İlk adım\n' : '## Idea\n\n## Why it matters\n\n## First step\n';
+    }
+    setTemplatesOpen(false);
     openEditor(draft);
   };
 
@@ -409,8 +589,7 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     if (result?.note && !remove) mergeServerNote(result.note);
   };
 
-  const deletePermanently = async (note: Note) => {
-    if (!window.confirm('Bu not kalıcı olarak silinsin mi? Bu işlem geri alınamaz.')) return;
+  const performPermanentDelete = async (note: Note) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setNotes((items) => items.filter((item) => item.id !== note.id));
     if (editorRef.current?.id === note.id) {
@@ -421,8 +600,15 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     await dispatchOperation({ id: crypto.randomUUID(), method: 'DELETE', url: `/api/notes/${note.id}`, createdAt: new Date().toISOString() });
   };
 
-  const uploadImage = async (file: File) => {
-    if (!navigator.onLine) { showToast('Görsel yüklemek için bağlantı gerekli.'); return; }
+  const deletePermanently = (note: Note) => setConfirmation({
+    title: ui('Not kalıcı olarak silinsin mi?', 'Delete this note forever?'),
+    message: ui('Bu işlem geri alınamaz. Nota bağlı dosyalar da silinir.', 'This cannot be undone. Attached files will also be deleted.'),
+    destructive: true,
+    action: async () => { setConfirmation(null); await performPermanentDelete(note); },
+  });
+
+  const uploadAttachment = async (file: File) => {
+    if (!navigator.onLine) { showToast('Dosya yüklemek için bağlantı gerekli.'); return; }
     await persistEditor(true);
     await saveChain.current;
     const current = editorRef.current;
@@ -430,17 +616,17 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     const form = new FormData();
     form.append('file', file);
     try {
-      setSaveStatus('Görsel yükleniyor…');
+      setSaveStatus('Dosya yükleniyor…');
       const response = await fetch(`/api/notes/${current.id}/attachments`, { method: 'POST', body: form });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Görsel yüklenemedi.');
+      if (!response.ok) throw new Error(data.error || 'Dosya yüklenemedi.');
       const next = { ...editorRef.current!, attachments: [...editorRef.current!.attachments, data.attachment] };
       editorRef.current = next;
       setEditorNote(next);
       setNotes((items) => items.map((note) => note.id === next.id ? next : note));
-      setSaveStatus('Kaydedildi');
+      setSaveStatus(t('status.saved'));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Görsel yüklenemedi.');
+      showToast(error instanceof Error ? error.message : 'Dosya yüklenemedi.');
     }
   };
 
@@ -454,7 +640,27 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
       editorRef.current = next;
       setEditorNote(next);
       setNotes((items) => items.map((note) => note.id === next.id ? next : note));
-    } catch { showToast('Görsel kaldırılamadı.'); }
+    } catch { showToast('Dosya kaldırılamadı.'); }
+  };
+
+  const duplicateNote = async (note: Note) => {
+    try {
+      const response = await fetch(`/api/notes/${note.id}/duplicate`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Not çoğaltılamadı.');
+      setNotes((items) => [data.note, ...items]);
+      setViewerNote(null);
+      showToast('Not çoğaltıldı.');
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Not çoğaltılamadı.'); }
+  };
+
+  const shareNote = async (note: Note) => {
+    try {
+      const response = await fetch(`/api/notes/${note.id}/share`, { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Paylaşım bağlantısı oluşturulamadı.');
+      setShareUrl(data.url);
+    } catch (error) { showToast(error instanceof Error ? error.message : 'Paylaşım bağlantısı oluşturulamadı.'); }
   };
 
   const addLabel = async () => {
@@ -471,8 +677,7 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     } catch (error) { showToast(error instanceof Error ? error.message : 'Etiket eklenemedi.'); }
   };
 
-  const removeLabel = async (label: Label) => {
-    if (!window.confirm(`“${label.name}” etiketi silinsin mi? Notlar silinmez.`)) return;
+  const performRemoveLabel = async (label: Label) => {
     try {
       const response = await fetch(`/api/labels/${label.id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error();
@@ -481,6 +686,13 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
       if (activeLabel?.id === label.id) setActiveLabel(null);
     } catch { showToast('Etiket silinemedi.'); }
   };
+
+  const removeLabel = (label: Label) => setConfirmation({
+    title: ui('Etiketi sil', 'Delete label'),
+    message: ui(`“${label.name}” etiketi silinecek. Notlar silinmez.`, `The “${label.name}” label will be removed. Notes will stay.`),
+    destructive: true,
+    action: async () => { setConfirmation(null); await performRemoveLabel(label); },
+  });
 
   const reorder = async (targetId: string) => {
     if (!draggedId || draggedId === targetId) return;
@@ -501,26 +713,89 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
   };
 
   const filteredNotes = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('tr');
-    if (!query) return notes;
-    return notes.filter((note) => [
-      note.title,
-      note.content,
-      ...note.items.map((item) => item.text),
-      ...note.labels.map((label) => label.name),
-    ].some((value) => value.toLocaleLowerCase('tr').includes(query)));
-  }, [notes, search]);
+    const query = search.trim().toLocaleLowerCase(settings.locale);
+    const now = filterEpoch;
+    const dateCutoff = filters.date === 'today' ? now - 86_400_000 : filters.date === 'week' ? now - 604_800_000 : filters.date === 'month' ? now - 2_592_000_000 : 0;
+    return notes.filter((note) => {
+      if (query && ![note.title, note.content, ...note.items.map((item) => item.text), ...note.labels.map((label) => label.name)].some((value) => value.toLocaleLowerCase(settings.locale).includes(query))) return false;
+      if (filters.color !== 'all' && note.color !== filters.color) return false;
+      if (filters.label !== 'all' && !note.labels.some((label) => label.id === filters.label)) return false;
+      if (filters.reminder === 'yes' && !note.reminderAt) return false;
+      if (filters.reminder === 'no' && note.reminderAt) return false;
+      if (dateCutoff && new Date(note.updatedAt).getTime() < dateCutoff) return false;
+      return true;
+    });
+  }, [filterEpoch, filters, notes, search, settings.locale]);
 
   const pinnedNotes = filteredNotes.filter((note) => note.pinned);
   const otherNotes = filteredNotes.filter((note) => !note.pinned);
-  const canReorder = view === 'notes' && !activeLabel && !search;
+  const canReorder = view === 'notes' && !activeLabel && !search && !selectionEnabled && !hasActiveFilters(filters);
 
   const navigate = (nextView: NoteView, label: Label | null = null) => {
     setView(nextView);
     setActiveLabel(label);
     setSearch('');
     setSidebarOpen(false);
+    setSelectedIds(new Set());
+    setSelectionEnabled(false);
+    window.history.replaceState(null, '', nextView === 'notes' ? location.pathname : `#${nextView}`);
   };
+
+  const toggleSelected = (note: Note) => {
+    setSelectionEnabled(true);
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(note.id)) next.delete(note.id); else next.add(note.id);
+      return next;
+    });
+  };
+
+  const selectedNotes = notes.filter((note) => selectedIds.has(note.id));
+
+  const bulkPatch = async (patch: Partial<Note>, remove = false) => {
+    await Promise.all(selectedNotes.map((note) => patchNote(note, patch, remove)));
+    setSelectedIds(new Set());
+    setSelectionEnabled(false);
+  };
+
+  const bulkAddLabel = async (labelId: string) => {
+    const label = labels.find((item) => item.id === labelId);
+    if (!label) return;
+    await Promise.all(selectedNotes.map((note) => patchNote(note, { labels: note.labels.some((item) => item.id === label.id) ? note.labels : [...note.labels, label] })));
+    setSelectedIds(new Set());
+    setSelectionEnabled(false);
+  };
+
+  const performBulkDeleteForever = async () => {
+    setNotes((items) => items.filter((note) => !selectedIds.has(note.id)));
+    await Promise.all(selectedNotes.map((note) => dispatchOperation({ id: crypto.randomUUID(), method: 'DELETE', url: `/api/notes/${note.id}`, createdAt: new Date().toISOString() })));
+    setSelectedIds(new Set());
+    setSelectionEnabled(false);
+  };
+
+  const bulkDeleteForever = () => setConfirmation({
+    title: ui('Seçili notları kalıcı sil', 'Delete selected notes forever'),
+    message: ui(`${selectedNotes.length} not kalıcı olarak silinecek. Bu işlem geri alınamaz.`, `${selectedNotes.length} notes will be deleted permanently. This cannot be undone.`),
+    destructive: true,
+    action: async () => { setConfirmation(null); await performBulkDeleteForever(); },
+  });
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1) as NoteView;
+    const hashTask = window.setTimeout(() => { if (['reminders', 'calendar', 'archive', 'trash'].includes(hash)) setView(hash); }, 0);
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const editing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable;
+      if (event.key === 'Escape') { setFilterOpen(false); setTemplatesOpen(false); setSelectedIds(new Set()); setSelectionEnabled(false); if (editorRef.current) closeEditor(); else setViewerNote(null); }
+      if (!editing && event.key === '/') { event.preventDefault(); searchInput.current?.focus(); }
+      if (!editing && event.key.toLowerCase() === 'n') { event.preventDefault(); newNote(); }
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && editorRef.current) closeEditor();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { window.clearTimeout(hashTask); window.removeEventListener('keydown', onKey); };
+    // Keyboard commands intentionally bind to the current editor state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const reloadLabels = async () => {
     try {
@@ -532,45 +807,61 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
     } catch { setOffline(true); }
   };
 
+  const toggleNavigation = () => {
+    if (compactNavigation) {
+      setSidebarOpen((value) => !value);
+      return;
+    }
+    void persistSettings({ sidebarCollapsed: !settings.sidebarCollapsed });
+  };
+
   const sidebar = (
     <>
-      <button className={`nav-item ${view === 'notes' && !activeLabel ? 'active' : ''}`} onClick={() => navigate('notes')}><Lightbulb size={20} /><span>Notlar</span></button>
-      <button className={`nav-item ${view === 'reminders' ? 'active' : ''}`} onClick={() => navigate('reminders')}><Bell size={20} /><span>Hatırlatıcılar</span></button>
-      <div className="sidebar-caption"><span>ETİKETLER</span><button onClick={() => setLabelManagerOpen(true)} aria-label="Etiketleri düzenle"><Settings size={14} /></button></div>
+      <button className={`nav-item ${view === 'notes' && !activeLabel ? 'active' : ''}`} onClick={() => navigate('notes')}><Lightbulb size={20} /><span>{t('nav.notes')}</span></button>
+      <button className={`nav-item ${view === 'reminders' ? 'active' : ''}`} onClick={() => navigate('reminders')}><Bell size={20} /><span>{t('nav.reminders')}</span></button>
+      <button className={`nav-item ${view === 'calendar' ? 'active' : ''}`} onClick={() => navigate('calendar')}><CalendarDays size={20} /><span>{t('nav.calendar')}</span></button>
+      <div className="sidebar-caption"><span>{t('nav.labels').toLocaleUpperCase(settings.locale)}</span><button onClick={() => setLabelManagerOpen(true)} aria-label={t('nav.labels')}><Settings size={14} /></button></div>
       {labels.map((label) => (
         <button className={`nav-item ${activeLabel?.id === label.id ? 'active' : ''}`} key={label.id} onClick={() => navigate('notes', label)}>
           <Tag size={19} /><span>{label.name}</span>
         </button>
       ))}
-      {labels.length === 0 && <button className="nav-item quiet" onClick={() => setLabelManagerOpen(true)}><Plus size={19} /><span>Etiket oluştur</span></button>}
+      {labels.length === 0 && <button className="nav-item quiet" onClick={() => setLabelManagerOpen(true)}><Plus size={19} /><span>{t('nav.createLabel')}</span></button>}
       <div className="sidebar-divider" />
-      <button className={`nav-item ${view === 'archive' ? 'active' : ''}`} onClick={() => navigate('archive')}><Archive size={20} /><span>Arşiv</span></button>
-      <button className={`nav-item ${view === 'trash' ? 'active' : ''}`} onClick={() => navigate('trash')}><Trash2 size={20} /><span>Çöp kutusu</span></button>
-      <button className="nav-item" onClick={() => { setSettingsOpen(true); setSidebarOpen(false); }}><Settings size={20} /><span>Ayarlar</span></button>
+      <button className={`nav-item ${view === 'archive' ? 'active' : ''}`} onClick={() => navigate('archive')}><Archive size={20} /><span>{t('nav.archive')}</span></button>
+      <button className={`nav-item ${view === 'trash' ? 'active' : ''}`} onClick={() => navigate('trash')}><Trash2 size={20} /><span>{t('nav.trash')}</span></button>
+      <button className="nav-item" onClick={() => { setSettingsOpen(true); setSidebarOpen(false); }}><Settings size={20} /><span>{t('nav.settings')}</span></button>
     </>
   );
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${settings.sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <header className="topbar">
-        <button className="icon-button menu-button" onClick={() => setSidebarOpen(true)} aria-label="Menüyü aç"><Menu size={21} /></button>
-        <button className="brand" onClick={() => navigate('notes')} aria-label="Suur notlarına git">
+        <button
+          className="icon-button menu-button"
+          onClick={toggleNavigation}
+          aria-label={compactNavigation ? (sidebarOpen ? ui('Menüyü kapat', 'Close menu') : ui('Menüyü aç', 'Open menu')) : (settings.sidebarCollapsed ? ui('Menüyü göster', 'Show menu') : ui('Menüyü gizle', 'Hide menu'))}
+          aria-expanded={compactNavigation ? sidebarOpen : !settings.sidebarCollapsed}
+        ><Menu size={21} /></button>
+        <button className="brand" onClick={() => navigate('notes')} aria-label={ui('Suur notlarına git', 'Go to Suur notes')}>
           <span className="brand-logo" aria-hidden="true" />
           <span>Suur</span>
         </button>
         <label className="search-box">
           <Search size={19} aria-hidden="true" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Notlarda ara" aria-label="Notlarda ara" />
-          {search && <button onClick={() => setSearch('')} aria-label="Aramayı temizle"><X size={17} /></button>}
+          <input ref={searchInput} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('search')} aria-label={t('search')} />
+          {search && <button onClick={() => setSearch('')} aria-label={ui('Aramayı temizle', 'Clear search')}><X size={17} /></button>}
         </label>
         <div className="top-actions">
-          <span className={`connection-state ${offline ? 'offline' : ''}`} title={offline ? 'Çevrimdışı' : syncing ? 'Senkronize ediliyor' : 'Senkronize'}>
+          <span className={`connection-state ${offline ? 'offline' : ''}`} title={offline ? t('status.offline') : syncing ? t('status.syncing') : t('status.synced')}>
             {syncing ? <RefreshCw className="spin" size={17} /> : offline ? <CloudOff size={17} /> : <Cloud size={17} />}
           </span>
-          <button className="icon-button layout-toggle" onClick={() => void persistSettings({ view: settings.view === 'grid' ? 'list' : 'grid' })} aria-label={settings.view === 'grid' ? 'Liste görünümü' : 'Grid görünümü'} title={settings.view === 'grid' ? 'Liste görünümü' : 'Grid görünümü'}>
+          <button className={`icon-button ${filterOpen || hasActiveFilters(filters) ? 'active' : ''}`} onClick={() => setFilterOpen((value) => !value)} aria-label={ui('Notları filtrele', 'Filter notes')} title={ui('Notları filtrele', 'Filter notes')}><Filter size={18} />{hasActiveFilters(filters) && <span className="toolbar-badge" />}</button>
+          <button className={`icon-button ${selectionEnabled ? 'active' : ''}`} onClick={() => { setSelectionEnabled((value) => !value); setSelectedIds(new Set()); }} aria-label={ui('Notları seç', 'Select notes')} title={ui('Notları seç', 'Select notes')}><CheckSquare size={18} /></button>
+          <button className="icon-button layout-toggle" onClick={() => void persistSettings({ view: settings.view === 'grid' ? 'list' : 'grid' })} aria-label={settings.view === 'grid' ? ui('Liste görünümü', 'List view') : ui('Grid görünümü', 'Grid view')} title={settings.view === 'grid' ? ui('Liste görünümü', 'List view') : ui('Grid görünümü', 'Grid view')}>
             {settings.view === 'grid' ? <List size={20} /> : <Grid2X2 size={19} />}
           </button>
-          <button className="avatar" onClick={() => setSettingsOpen(true)} aria-label="Suur ayarları" title="Ayarlar">
+          <button className="avatar" onClick={() => setSettingsOpen(true)} aria-label={ui('Suur ayarları', 'Suur settings')} title={t('nav.settings')}>
             {currentUser.avatarUrl
               ? <img src={currentUser.avatarUrl} alt="" />
               : (currentUser.displayName || currentUser.username).slice(0, 1).toLocaleUpperCase('tr')}
@@ -578,14 +869,14 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
         </div>
       </header>
 
-      <aside className="sidebar desktop-sidebar" aria-label="Ana menü">{sidebar}<div className="privacy-note">Verilerin bu sunucuda kalır.</div></aside>
+      <aside className="sidebar desktop-sidebar" aria-label={ui('Ana menü', 'Main menu')}>{sidebar}<div className="privacy-note">{ui('Verilerin bu sunucuda kalır.', 'Your data stays on this server.')}</div></aside>
 
       {sidebarOpen && (
         <div className="mobile-drawer-backdrop" onClick={() => setSidebarOpen(false)}>
           <aside className="mobile-drawer" onClick={(event) => event.stopPropagation()}>
             <div className="drawer-brand">
               <span className="brand-logo" aria-hidden="true" />
-              <strong>Suur</strong><button onClick={() => setSidebarOpen(false)} aria-label="Menüyü kapat"><X size={20} /></button>
+              <strong>Suur</strong><button onClick={() => setSidebarOpen(false)} aria-label={ui('Menüyü kapat', 'Close menu')}><X size={20} /></button>
             </div>
             {sidebar}
           </aside>
@@ -593,38 +884,44 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
       )}
 
       <section className="workspace">
-        <div className="mobile-title-row"><h1>{viewTitle(view, activeLabel)}</h1></div>
+        <div className="mobile-title-row"><h1>{viewTitle(view, activeLabel, settings.locale)}</h1></div>
+        {syncIssue && <div className="sync-warning" role="status"><CloudOff size={17} /><span>{syncIssue === 'auth' ? ui('Oturum sona erdi. Bekleyen değişiklikler cihazda korunuyor; yeniden giriş yapınca gönderilecek.', 'Your session ended. Pending changes are safe on this device and will sync after sign-in.') : ui('Eski bir bekleyen değişiklik sunucu tarafından kabul edilmedi. Ekran otomatik yenilenmeyecek; düzeltildikten sonra yeniden deneyebilirsiniz.', 'An older pending change was rejected by the server. The screen will not auto-refresh; retry after it is corrected.')}</span><button onClick={() => void syncPending(true)}>{ui('Yeniden dene', 'Retry')}</button></div>}
+        {selectionEnabled && <BulkToolbar locale={settings.locale} view={view} count={selectedIds.size} canDelete={selectedNotes.every((note) => note.ownerId === currentUser.id)} labels={labels} onArchive={() => void bulkPatch({ archived: view !== 'archive' }, true)} onTrash={() => void bulkPatch({ trashedAt: new Date().toISOString() }, true)} onRestore={() => void bulkPatch({ trashedAt: null }, true)} onDeleteForever={() => void bulkDeleteForever()} onAddLabel={(id) => void bulkAddLabel(id)} onClose={() => { setSelectionEnabled(false); setSelectedIds(new Set()); }} />}
+        {filterOpen && <NoteFilterPanel locale={settings.locale} labels={labels} filters={filters} onChange={(next) => { if (next.date !== filters.date) setFilterEpoch(Date.now()); setFilters(next); }} onClear={() => { setFilters({ color: 'all', label: 'all', date: 'all', reminder: 'all' }); setFilterEpoch(0); }} onClose={() => setFilterOpen(false)} />}
         {view === 'notes' && !activeLabel && (
-          <div className="composer" role="group" aria-label="Yeni not oluştur">
-            <button className="composer-main" onClick={() => newNote('text')}>Bir not al…</button>
-            <button onClick={() => newNote('checklist')} aria-label="Yeni checklist" title="Yeni checklist"><CheckSquareIcon /></button>
-          </div>
+          <div className="composer-wrap"><div className="composer" role="group" aria-label={t('newNote')}>
+            <button className="composer-main" onClick={() => newNote('text')}>{t('newNote')}</button>
+            <button onClick={() => newNote('checklist')} aria-label={t('newChecklist')} title={t('newChecklist')}><CheckSquareIcon /></button>
+            <button onClick={() => setTemplatesOpen((value) => !value)} aria-label={ui('Not şablonları', 'Note templates')} title={ui('Not şablonları', 'Note templates')}><LayoutTemplate size={19} /></button>
+          </div>{templatesOpen && <TemplateMenu locale={settings.locale} onChoose={newFromTemplate} />}</div>
         )}
 
         {loading ? (
-          <div className="loading-grid" aria-label="Notlar yükleniyor">{[1, 2, 3, 4].map((item) => <span key={item} />)}</div>
+          <div className="loading-grid" aria-label={ui('Notlar yükleniyor', 'Loading notes')}>{[1, 2, 3, 4].map((item) => <span key={item} />)}</div>
+        ) : view === 'calendar' ? (
+          <CalendarView notes={filteredNotes} locale={settings.locale} onOpen={openViewer} />
         ) : filteredNotes.length === 0 ? (
           <div className="empty-state">
             {view === 'trash' ? <Trash2 size={38} /> : view === 'archive' ? <Archive size={38} /> : activeLabel ? <Tags size={38} /> : <Lightbulb size={40} />}
-            <h2>{search ? 'Eşleşen not bulunamadı' : view === 'trash' ? 'Çöp kutusu boş' : view === 'archive' ? 'Arşiv boş' : 'İlk notunu oluştur'}</h2>
-            <p>{search ? 'Başka bir kelimeyle aramayı dene.' : view === 'trash' ? 'Sildiğin notlar burada görünür.' : 'Aklındakini kaybetmeden Suur’a bırak.'}</p>
-            {view === 'notes' && !search && <button onClick={() => newNote()}><Plus size={17} /> Yeni not</button>}
+            <h2>{search ? t('empty.noMatch') : view === 'trash' ? t('empty.trash') : view === 'archive' ? t('empty.archive') : t('empty.first')}</h2>
+            <p>{search ? t('empty.searchHint') : view === 'trash' ? t('empty.trashHint') : t('empty.firstHint')}</p>
+            {view === 'notes' && !search && <button onClick={() => newNote()}><Plus size={17} /> {t('editor.new')}</button>}
           </div>
         ) : (
           <>
             {pinnedNotes.length > 0 && (
               <section className="note-section">
-                <h2 className="section-label">SABİTLENMİŞ</h2>
+                <h2 className="section-label">{t('pinned')}</h2>
                 <div className={`notes-grid ${settings.view === 'list' ? 'list-view' : ''}`}>
-                  {pinnedNotes.map((note) => <NoteCard key={note.id} note={note} view={view} layout={settings.view} draggable={canReorder} onOpen={openViewer} onPatch={(item, patch, remove) => void patchNote(item, patch, remove)} onPermanentDelete={(item) => void deletePermanently(item)} onDragStart={setDraggedId} onDrop={(id) => void reorder(id)} />)}
+                  {pinnedNotes.map((note) => <NoteCard key={note.id} locale={settings.locale} note={note} currentUserId={currentUser.id} view={view} layout={settings.view} draggable={canReorder} selectionMode={selectionEnabled} selected={selectedIds.has(note.id)} onSelect={toggleSelected} onOpen={openViewer} onPatch={(item, patch, remove) => void patchNote(item, patch, remove)} onPermanentDelete={deletePermanently} onDragStart={setDraggedId} onDrop={(id) => void reorder(id)} />)}
                 </div>
               </section>
             )}
             {otherNotes.length > 0 && (
               <section className="note-section">
-                {pinnedNotes.length > 0 && <h2 className="section-label">DİĞER</h2>}
+                {pinnedNotes.length > 0 && <h2 className="section-label">{t('others')}</h2>}
                 <div className={`notes-grid ${settings.view === 'list' ? 'list-view' : ''}`}>
-                  {otherNotes.map((note) => <NoteCard key={note.id} note={note} view={view} layout={settings.view} draggable={canReorder} onOpen={openViewer} onPatch={(item, patch, remove) => void patchNote(item, patch, remove)} onPermanentDelete={(item) => void deletePermanently(item)} onDragStart={setDraggedId} onDrop={(id) => void reorder(id)} />)}
+                  {otherNotes.map((note) => <NoteCard key={note.id} locale={settings.locale} note={note} currentUserId={currentUser.id} view={view} layout={settings.view} draggable={canReorder} selectionMode={selectionEnabled} selected={selectedIds.has(note.id)} onSelect={toggleSelected} onOpen={openViewer} onPatch={(item, patch, remove) => void patchNote(item, patch, remove)} onPermanentDelete={deletePermanently} onDragStart={setDraggedId} onDrop={(id) => void reorder(id)} />)}
                 </div>
               </section>
             )}
@@ -632,22 +929,33 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
         )}
       </section>
 
-      {view === 'notes' && <button className="mobile-fab" onClick={() => newNote()} aria-label="Yeni not"><Plus size={25} /></button>}
+      {view === 'notes' && <button className="mobile-fab" onClick={() => newNote()} aria-label={t('newNote')}><Plus size={25} /></button>}
 
       {viewerNote && (
         <NoteViewer
           note={viewerNote}
+          locale={settings.locale}
           view={view}
           onClose={() => setViewerNote(null)}
           onEdit={editFromViewer}
           onRestore={() => { void patchNote(viewerNote, { trashedAt: null }, true); setViewerNote(null); }}
-          onPermanentDelete={() => void deletePermanently(viewerNote)}
+          onPermanentDelete={() => deletePermanently(viewerNote)}
+          canDelete={viewerNote.ownerId === currentUser.id}
+          canShare={viewerNote.ownerId === currentUser.id}
+          onDuplicate={() => void duplicateNote(viewerNote)}
+          onShare={() => void shareNote(viewerNote)}
+          onNoteChange={(note) => { mergeServerNote(note); setViewerNote(note); }}
         />
       )}
 
       {editorNote && (
         <NoteEditor
           note={editorNote}
+          locale={settings.locale}
+          currentUserId={currentUser.id}
+          offline={offline}
+          users={directoryUsers}
+          completedItemsBottom={settings.completedItemsBottom}
           labels={labels}
           view={view}
           saveStatus={saveStatus}
@@ -656,8 +964,8 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
           onArchive={() => { const current = editorRef.current; if (current) commitEditorAction({ archived: !current.archived }); }}
           onTrash={() => commitEditorAction({ trashedAt: new Date().toISOString() })}
           onRestore={() => commitEditorAction({ trashedAt: null })}
-          onPermanentDelete={() => { const current = editorRef.current; if (current) void deletePermanently(current); }}
-          onUpload={(file) => void uploadImage(file)}
+          onPermanentDelete={() => { const current = editorRef.current; if (current) deletePermanently(current); }}
+          onUpload={(file) => void uploadAttachment(file)}
           onDeleteAttachment={(id) => void deleteAttachment(id)}
         />
       )}
@@ -679,13 +987,16 @@ export function SuurApp({ initialUser }: { initialUser: User }) {
         <SettingsCenter
           currentUser={currentUser}
           settings={settings}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => { if (!currentUser.mustChangePassword) setSettingsOpen(false); }}
           onSettingsChange={persistSettings}
           onUserChange={setCurrentUser}
           onImportComplete={() => { void loadNotes(); void reloadLabels(); }}
           onEditLabels={() => setLabelManagerOpen(true)}
         />
       )}
+
+      {shareUrl && <ShareDialog locale={settings.locale} url={shareUrl} onClose={() => setShareUrl('')} />}
+      {confirmation && <ConfirmDialog locale={settings.locale} title={confirmation.title} message={confirmation.message} destructive={confirmation.destructive} onCancel={() => setConfirmation(null)} onConfirm={confirmation.action} />}
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </main>
