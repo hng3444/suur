@@ -4,6 +4,26 @@ Suur is a fast, multilingual, self-hosted note-taking app for people who like th
 
 **Keywords:** self-hosted notes, offline-first notes app, private Google Keep alternative, Docker note-taking app, CasaOS notes, SQLite PWA.
 
+## Screenshots
+
+### Home
+![Suur Home](screenshots/suur%20home.png)
+
+### Notes
+![Suur Home](screenshots/suur%20home%202.png)
+
+### Edit Mode
+![Suur Edit Mode](screenshots/suur%20edit%20mode.png)
+
+### Read Mode
+![Suur Read Mode](screenshots/suur%20read%20mode.png)
+
+### To-do List
+![Suur To-do List](screenshots/suur%20to%20do%20list%20edit%20mode.png)
+
+### Settings
+![Suur Settings](screenshots/suur%20settings.png)
+
 ## Why Suur?
 
 - Familiar card-based workflow without copying Google branding or assets
