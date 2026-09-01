@@ -1,6 +1,6 @@
 {
   "name": "suur",
-  "version": "0.2.0",
+  "version": "0.1.2",
   "description": "A fast, private, multilingual, self-hosted notes app with offline-first PWA support.",
   "keywords": ["self-hosted", "notes", "note-taking", "pwa", "offline-first", "docker", "casaos", "google-keep-alternative", "sqlite"],
   "homepage": "https://github.com/hng3444/suur",

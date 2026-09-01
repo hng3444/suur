@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Archive, ArchiveRestore, Bell, Check, GripVertical, Pin, PinOff, Trash2, Undo2, Users } from 'lucide-react';
 import { translate } from '@/lib/i18n';
 import { plainTextPreview } from '@/lib/client-utils';
@@ -49,16 +50,51 @@ export function NoteCard({
   onDragStart,
   onDrop,
 }: NoteCardProps) {
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStart = useRef({ x: 0, y: 0 });
+  const suppressClick = useRef(false);
   const stop = (event: React.MouseEvent) => event.stopPropagation();
   const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(locale, key, values);
   const ui = (turkish: string, english: string) => locale === 'tr' ? turkish : english;
   const cover = note.attachments.find((attachment) => attachment.mimeType.startsWith('image/'));
 
+  const cancelLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+  };
+
+  useEffect(() => cancelLongPress, []);
+
+  const startLongPress = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'touch' || selectionMode || (event.target as HTMLElement).closest('button, a, input, audio')) return;
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+    cancelLongPress();
+    longPressTimer.current = setTimeout(() => {
+      suppressClick.current = true;
+      navigator.vibrate?.(20);
+      onSelect(note);
+      longPressTimer.current = null;
+    }, 450);
+  };
+
+  const moveLongPress = (event: React.PointerEvent<HTMLElement>) => {
+    if (Math.hypot(event.clientX - pointerStart.current.x, event.clientY - pointerStart.current.y) > 9) cancelLongPress();
+  };
+
   return (
-    <article
-      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${selectionMode ? 'selection-mode' : ''} ${selected ? 'selected' : ''}`}
-      onClick={() => selectionMode ? onSelect(note) : onOpen(note)}
-      onContextMenu={(event) => { event.preventDefault(); onSelect(note); }}
+    <div className={`note-card-shell note-${note.color} ${layout === 'list' ? 'note-card-shell-list' : ''} ${selectionMode ? 'selection-mode' : ''} ${selected ? 'selected' : ''}`}>
+      <button className="note-select" aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onSelect(note); }} aria-label={selected ? ui('Seçimi kaldır', 'Clear selection') : ui('Notu seç', 'Select note')}>{selected && <Check size={15} />}</button>
+      <article
+      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${selected ? 'selected' : ''}`}
+      onClick={() => {
+        if (suppressClick.current) { suppressClick.current = false; return; }
+        if (selectionMode) onSelect(note); else onOpen(note);
+      }}
+      onContextMenu={(event) => { event.preventDefault(); if (!suppressClick.current) onSelect(note); }}
+      onPointerDown={startLongPress}
+      onPointerMove={moveLongPress}
+      onPointerUp={cancelLongPress}
+      onPointerCancel={cancelLongPress}
       draggable={draggable}
       onDragStart={() => onDragStart(note.id)}
       onDragOver={(event) => { if (draggable) event.preventDefault(); }}
@@ -67,7 +103,6 @@ export function NoteCard({
       onKeyDown={(event) => { if (event.key === 'Enter') { if (selectionMode) onSelect(note); else onOpen(note); } }}
       aria-label={note.title || t('untitled')}
     >
-      <button className="note-select" aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onSelect(note); }} aria-label={selected ? ui('Seçimi kaldır', 'Clear selection') : ui('Notu seç', 'Select note')}>{selected && <Check size={15} />}</button>
       {cover && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="note-cover" src={cover.url} alt={cover.filename} loading="lazy" />
@@ -117,6 +152,7 @@ export function NoteCard({
           )}
         </div>
       </div>
-    </article>
+      </article>
+    </div>
   );
 }

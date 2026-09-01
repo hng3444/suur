@@ -15,7 +15,9 @@ import {
   ListTodo,
   LoaderCircle,
   Mic,
+  MoreVertical,
   Paperclip,
+  Palette,
   Pin,
   PinOff,
   Plus,
@@ -59,15 +61,7 @@ interface NoteEditorProps {
   onDeleteAttachment: (id: string) => void;
 }
 
-const colors: Array<{ value: NoteColor; label: string }> = [
-  { value: 'default', label: 'Varsayılan' },
-  { value: 'mint', label: 'Nane' },
-  { value: 'sage', label: 'Adaçayı' },
-  { value: 'sand', label: 'Kum' },
-  { value: 'rose', label: 'Gül' },
-  { value: 'sky', label: 'Gökyüzü' },
-  { value: 'lavender', label: 'Lavanta' },
-];
+const colors: NoteColor[] = ['default', 'mint', 'sage', 'sand', 'rose', 'sky', 'lavender'];
 
 function localDateTime(value: string | null) {
   if (!value) return '';
@@ -99,6 +93,8 @@ export function NoteEditor({
   onDeleteAttachment,
 }: NoteEditorProps) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const itemInputs = useRef(new Map<string, HTMLInputElement>());
+  const pendingItemFocus = useRef<string | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const voiceStream = useRef<MediaStream | null>(null);
   const [recording, setRecording] = useState(false);
@@ -108,6 +104,8 @@ export function NoteEditor({
   const [voiceMessage, setVoiceMessage] = useState('');
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [reminderNotice, setReminderNotice] = useState('');
+  const [activePanel, setActivePanel] = useState<'reminder' | 'assignee' | 'labels' | 'color' | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const readOnly = view === 'trash';
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const ui = (turkish: string, english: string) => locale === 'tr' ? turkish : english;
@@ -115,6 +113,16 @@ export function NoteEditor({
   const otherAttachments = note.attachments.filter((attachment) => !attachment.mimeType.startsWith('image/'));
 
   useEffect(() => () => voiceStream.current?.getTracks().forEach((track) => track.stop()), []);
+
+  useEffect(() => {
+    const id = pendingItemFocus.current;
+    if (!id) return;
+    const input = itemInputs.current.get(id);
+    if (input) {
+      input.focus();
+      pendingItemFocus.current = null;
+    }
+  }, [note.items]);
 
   useEffect(() => {
     if (!recording) return;
@@ -128,8 +136,27 @@ export function NoteEditor({
     onChange({ ...note, items });
   };
 
-  const addItem = () => {
-    onChange({ ...note, items: [...note.items, { id: crypto.randomUUID(), text: '', checked: false }] });
+  const addItem = (afterId?: string) => {
+    const item = { id: crypto.randomUUID(), text: '', checked: false };
+    const items = [...note.items];
+    const index = afterId ? items.findIndex((entry) => entry.id === afterId) + 1 : items.length;
+    items.splice(index < 0 ? items.length : index, 0, item);
+    pendingItemFocus.current = item.id;
+    onChange({ ...note, items });
+  };
+
+  const removeItem = (id: string, focusPrevious = false) => {
+    const index = note.items.findIndex((item) => item.id === id);
+    const previous = index > 0 ? note.items[index - 1] : note.items[index + 1];
+    const items = note.items.filter((item) => item.id !== id);
+    if (focusPrevious && previous) pendingItemFocus.current = previous.id;
+    if (items.length) {
+      onChange({ ...note, items });
+      return;
+    }
+    const emptyItem = { id: crypto.randomUUID(), text: '', checked: false };
+    pendingItemFocus.current = emptyItem.id;
+    onChange({ ...note, items: [emptyItem] });
   };
 
   const toggleLabel = (label: Label) => {
@@ -281,16 +308,29 @@ export function NoteEditor({
                   {item.checked && <CheckSquare size={16} />}
                 </button>
                 <input
+                  ref={(element) => {
+                    if (element) itemInputs.current.set(item.id, element);
+                    else itemInputs.current.delete(item.id);
+                  }}
                   value={item.text}
                   onChange={(event) => updateItem(item.id, { text: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addItem(item.id);
+                    } else if (event.key === 'Backspace' && !item.text && note.items.length > 1) {
+                      event.preventDefault();
+                      removeItem(item.id, true);
+                    }
+                  }}
                   placeholder={t('editor.item')}
                   className={item.checked ? 'completed' : ''}
                   readOnly={readOnly}
                 />
-                {!readOnly && <button className="row-remove" onClick={() => onChange({ ...note, items: note.items.filter((entry) => entry.id !== item.id) })} aria-label={ui('Öğeyi sil', 'Delete item')}><X size={15} /></button>}
+                {!readOnly && <button className="row-remove" onClick={() => removeItem(item.id)} aria-label={ui('Öğeyi sil', 'Delete item')}><X size={15} /></button>}
               </div>
             ))}
-            {!readOnly && <button className="add-list-item" onClick={addItem}><Plus size={16} /> {t('editor.addItem')}</button>}
+            {!readOnly && <button className="add-list-item" onClick={() => addItem()}><Plus size={16} /> {t('editor.addItem')}</button>}
           </div>
         ) : preview && note.contentFormat === 'markdown' ? (
           <div className="editor-markdown-preview"><MarkdownView value={note.content} /></div>
@@ -309,26 +349,15 @@ export function NoteEditor({
           <div className="editor-options">
             {offline && <p className="editor-inline-warning">{ui('Metin değişiklikleri çevrimdışı kaydedilir. Dosya ve ses eklemek için bağlantı gerekir.', 'Text changes are saved offline. Attachments and voice notes require a connection.')}</p>}
             {voiceState !== 'idle' && <p className={`editor-inline-status ${voiceState}`} role="status">{voiceState === 'requesting' || voiceState === 'processing' ? <LoaderCircle className="spin" size={16} /> : voiceState === 'success' ? <CheckCircle2 size={16} /> : voiceState === 'error' ? <AlertCircle size={16} /> : <Mic size={16} />}<span>{voiceMessage}{voiceState === 'recording' ? ` · ${String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:${String(recordingSeconds % 60).padStart(2, '0')} · ${ui('Bitirmek için mikrofona yeniden dokunun', 'Tap the microphone again to stop')}` : ''}</span></p>}
-            <div className="option-row">
-              <Bell size={17} />
-              <label htmlFor="reminder">{t('editor.reminder')}</label>
-              <input
-                id="reminder"
-                type="datetime-local"
-                value={localDateTime(note.reminderAt)}
-                onChange={(event) => { const reminderAt = event.target.value ? new Date(event.target.value).toISOString() : null; onChange({ ...note, reminderAt }); if (reminderAt) void requestReminderPermission(); else setReminderNotice(''); }}
-              />
-            </div>
-            {reminderNotice && <p className="reminder-permission-status" role="status"><Bell size={14} /><span>{reminderNotice}</span></p>}
+            {activePanel === 'reminder' && <div className="editor-tool-panel"><div className="option-row">
+              <Bell size={17} /><label htmlFor="reminder">{t('editor.reminder')}</label><input id="reminder" type="datetime-local" value={localDateTime(note.reminderAt)} onChange={(event) => { const reminderAt = event.target.value ? new Date(event.target.value).toISOString() : null; onChange({ ...note, reminderAt }); if (reminderAt) void requestReminderPermission(); else setReminderNotice(''); }} />
+            </div>{reminderNotice && <p className="reminder-permission-status" role="status"><Bell size={14} /><span>{reminderNotice}</span></p>}</div>}
 
-            <div className="option-row">
-              <UserRound size={17} />
-              <label htmlFor="assignee">{ui('Atanan kullanıcı', 'Assigned user')}</label>
-              <select id="assignee" disabled={note.ownerId !== currentUserId} value={note.assignedUserId || ''} onChange={(event) => onChange({ ...note, assignedUserId: event.target.value || null })}><option value="">{ui('Yalnızca ben', 'Only me')}</option>{users.filter((user) => user.id !== note.ownerId).map((user) => <option key={user.id} value={user.id}>{user.displayName} (@{user.username})</option>)}</select>
-            </div>
+            {activePanel === 'assignee' && <div className="editor-tool-panel"><div className="option-row">
+              <UserRound size={17} /><label htmlFor="assignee">{ui('Atanan kullanıcı', 'Assigned user')}</label><select id="assignee" disabled={note.ownerId !== currentUserId} value={note.assignedUserId || ''} onChange={(event) => onChange({ ...note, assignedUserId: event.target.value || null })}><option value="">{ui('Yalnızca ben', 'Only me')}</option>{users.filter((user) => user.id !== note.ownerId).map((user) => <option key={user.id} value={user.id}>{user.displayName} (@{user.username})</option>)}</select>
+            </div></div>}
 
-            <details className="label-picker">
-              <summary><Tag size={17} /> {t('editor.labels')} <span>{note.labels.length || ''}</span></summary>
+            {activePanel === 'labels' && <div className="editor-tool-panel"><div className="label-picker"><div className="editor-panel-title"><Tag size={17} /> {t('editor.labels')} {note.labels.length > 0 && <span>{note.labels.length}</span>}</div>
               <div className="label-picker-list">
                 {labels.length === 0 ? <p>{t('editor.noLabels')}</p> : labels.map((label) => (
                   <label key={label.id}>
@@ -337,19 +366,19 @@ export function NoteEditor({
                   </label>
                 ))}
               </div>
-            </details>
+            </div></div>}
 
-            <div className="color-picker" aria-label={ui('Not rengi', 'Note color')}>
+            {activePanel === 'color' && <div className="editor-tool-panel"><div className="color-picker" aria-label={ui('Not rengi', 'Note color')}>
               {colors.map((color) => (
                 <button
-                  key={color.value}
-                  className={`color-dot note-${color.value} ${note.color === color.value ? 'selected' : ''}`}
-                  onClick={() => onChange({ ...note, color: color.value })}
-                  title={color.label}
-                  aria-label={`${color.label} rengi`}
+                  key={color}
+                  className={`color-dot note-${color} ${note.color === color ? 'selected' : ''}`}
+                  onClick={() => onChange({ ...note, color })}
+                  title={t(`color.${color}` as Parameters<typeof translate>[1])}
+                  aria-label={t(`color.${color}` as Parameters<typeof translate>[1])}
                 />
               ))}
-            </div>
+            </div></div>}
           </div>
         )}
 
@@ -359,13 +388,20 @@ export function NoteEditor({
               <>
                 <button className="toolbar-button" onClick={() => onChange({ ...note, type: 'text' })} aria-label={t('editor.text')} title={t('editor.text')}><Type size={18} /></button>
                 <button className="toolbar-button" onClick={() => onChange({ ...note, type: 'checklist', items: note.items.length ? note.items : [{ id: crypto.randomUUID(), text: '', checked: false }] })} aria-label={t('editor.checklist')} title={t('editor.checklist')}><ListTodo size={18} /></button>
+                <button className={`toolbar-button ${activePanel === 'reminder' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'reminder' ? null : 'reminder')} aria-label={t('editor.reminder')} title={t('editor.reminder')}><Bell size={18} /></button>
                 <button className="toolbar-button" disabled={offline} onClick={() => fileInput.current?.click()} aria-label={t('editor.attachment')} title={offline ? ui('Çevrimdışıyken dosya eklenemez', 'Attachments are unavailable offline') : t('editor.attachment')}><Paperclip size={18} /><span className="tool-label">{ui('Dosya', 'File')}</span></button>
                 <input ref={fileInput} hidden multiple type="file" accept="image/*,audio/*,application/pdf,text/plain,text/markdown,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />
-                <button className={`toolbar-button ${recording ? 'recording' : ''}`} disabled={offline} onClick={() => void toggleVoice()} aria-label={ui('Sesli not', 'Voice note')} title={recording ? ui('Kaydı bitir', 'Stop recording') : ui('Sesli not', 'Voice note')}><Mic size={18} /><span className="tool-label">{ui('Ses', 'Voice')}</span></button>
-                {note.type === 'text' && <button className={`toolbar-button ${note.contentFormat === 'markdown' ? 'active' : ''}`} onClick={() => { onChange({ ...note, contentFormat: note.contentFormat === 'markdown' ? 'plain' : 'markdown' }); setPreview(false); }} aria-label="Markdown" title="Markdown"><Code2 size={18} /></button>}
-                {note.type === 'text' && note.contentFormat === 'markdown' && <button className={`toolbar-button ${preview ? 'active' : ''}`} onClick={() => setPreview((value) => !value)} aria-label={ui('Önizleme', 'Preview')} title={ui('Önizleme', 'Preview')}><Eye size={18} /></button>}
-                <button className="toolbar-button" onClick={onArchive} aria-label={note.archived ? t('unarchive') : t('archive')} title={note.archived ? t('unarchive') : t('archive')}>{note.archived ? <ArchiveRestore size={18} /> : <Archive size={18} />}</button>
-                <button className="toolbar-button danger" onClick={onTrash} aria-label={t('moveTrash')} title={t('moveTrash')}><Trash2 size={18} /></button>
+                <div className={`editor-more-tools ${moreOpen ? 'open' : ''}`} onClick={() => setMoreOpen(false)}>
+                  <button className={`toolbar-button ${activePanel === 'assignee' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'assignee' ? null : 'assignee')} aria-label={t('editor.assignee')} title={t('editor.assignee')}><UserRound size={18} /><span className="more-tool-label">{t('editor.assignee')}</span></button>
+                  <button className={`toolbar-button ${activePanel === 'labels' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'labels' ? null : 'labels')} aria-label={t('editor.labels')} title={t('editor.labels')}><Tag size={18} /><span className="more-tool-label">{t('editor.labels')}</span></button>
+                  <button className={`toolbar-button ${activePanel === 'color' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'color' ? null : 'color')} aria-label={t('editor.color')} title={t('editor.color')}><Palette size={18} /><span className="more-tool-label">{t('editor.color')}</span></button>
+                  <button className={`toolbar-button ${recording ? 'recording' : ''}`} disabled={offline} onClick={() => void toggleVoice()} aria-label={t('editor.voice')} title={recording ? ui('Kaydı bitir', 'Stop recording') : t('editor.voice')}><Mic size={18} /><span className="more-tool-label">{t('editor.voice')}</span></button>
+                  {note.type === 'text' && <button className={`toolbar-button ${note.contentFormat === 'markdown' ? 'active' : ''}`} onClick={() => { onChange({ ...note, contentFormat: note.contentFormat === 'markdown' ? 'plain' : 'markdown' }); setPreview(false); }} aria-label="Markdown" title="Markdown"><Code2 size={18} /><span className="more-tool-label">Markdown</span></button>}
+                  {note.type === 'text' && note.contentFormat === 'markdown' && <button className={`toolbar-button ${preview ? 'active' : ''}`} onClick={() => setPreview((value) => !value)} aria-label={t('editor.preview')} title={t('editor.preview')}><Eye size={18} /><span className="more-tool-label">{t('editor.preview')}</span></button>}
+                  <button className="toolbar-button" onClick={onArchive} aria-label={note.archived ? t('unarchive') : t('archive')} title={note.archived ? t('unarchive') : t('archive')}>{note.archived ? <ArchiveRestore size={18} /> : <Archive size={18} />}<span className="more-tool-label">{note.archived ? t('unarchive') : t('archive')}</span></button>
+                  <button className="toolbar-button danger" onClick={onTrash} aria-label={t('moveTrash')} title={t('moveTrash')}><Trash2 size={18} /><span className="more-tool-label">{t('moveTrash')}</span></button>
+                </div>
+                <button className={`toolbar-button editor-more-toggle ${moreOpen ? 'active' : ''}`} onClick={() => setMoreOpen((value) => !value)} aria-label={t('editor.more')} title={t('editor.more')} aria-expanded={moreOpen}><MoreVertical size={19} /></button>
               </>
             ) : (
               <>

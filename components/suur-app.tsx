@@ -1,16 +1,16 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   Archive,
+  ArrowDownUp,
   Bell,
   CalendarDays,
   Cloud,
   CloudOff,
   Grid2X2,
   Filter,
-  LayoutTemplate,
   Lightbulb,
   List,
   Menu,
@@ -18,8 +18,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Palette,
-  Tag,
   Tags,
   Trash2,
   Users,
@@ -27,7 +25,7 @@ import {
 } from 'lucide-react';
 import { NoteCard } from '@/components/note-card';
 import { CalendarView } from '@/components/calendar-view';
-import { BulkToolbar, NoteFilterPanel, TemplateMenu } from '@/components/note-controls';
+import { BulkToolbar, NoteFilterPanel } from '@/components/note-controls';
 import { NoteEditor, type UploadFeedback } from '@/components/note-editor';
 import { NoteViewer } from '@/components/note-viewer';
 import { SettingsCenter } from '@/components/settings-center';
@@ -37,16 +35,7 @@ import { enqueue, getCache, queuedOperations, removeQueuedOperation, setCache, s
 import { languageDirection, translate } from '@/lib/i18n';
 import { hasActiveFilters, reconcileEditorSave, sortNotes } from '@/lib/client-utils';
 import { syncDecision } from '@/lib/sync-policy';
-import type { AppSettings, BrandingSettings, Label, Note, NoteColor, NoteView, User, UserSummary } from '@/lib/types';
-
-const noteColors: Array<{ value: Exclude<NoteColor, 'default'>; tr: string; en: string }> = [
-  { value: 'mint', tr: 'Nane', en: 'Mint' },
-  { value: 'sage', tr: 'Adaçayı', en: 'Sage' },
-  { value: 'sand', tr: 'Kum', en: 'Sand' },
-  { value: 'rose', tr: 'Gül', en: 'Rose' },
-  { value: 'sky', tr: 'Gökyüzü', en: 'Sky' },
-  { value: 'lavender', tr: 'Lavanta', en: 'Lavender' },
-];
+import type { AppSettings, BrandingSettings, Label, Note, NoteView, User, UserSummary } from '@/lib/types';
 
 const initialSettings: AppSettings = {
   theme: 'system',
@@ -61,6 +50,8 @@ const initialSettings: AppSettings = {
   trashRetentionDays: 30,
   completedItemsBottom: true,
 };
+
+const labelColors = ['#d9485f', '#e67700', '#d0a419', '#2f9e44', '#1971c2', '#7048e8', '#c2255c', '#6c757d'];
 
 function createDraft(ownerId = ''): Note {
   const timestamp = new Date().toISOString();
@@ -128,6 +119,31 @@ function viewTitle(view: NoteView, activeLabel: Label | null, locale: AppSetting
   return translate(locale, 'nav.notes');
 }
 
+function NoteMasonry({ layout, children }: { layout: AppSettings['view']; children: ReactNode }) {
+  const container = useRef<HTMLDivElement>(null);
+  const [columnCount, setColumnCount] = useState(1);
+  const items = Array.from({ length: columnCount }, () => [] as ReactNode[]);
+
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const updateColumns = () => {
+      const width = element.clientWidth;
+      const next = layout === 'list' ? 1 : width <= 620 ? (width >= 300 ? 2 : 1) : Math.max(2, Math.floor((width + 16) / 254));
+      setColumnCount(next);
+    };
+    updateColumns();
+    const observer = new ResizeObserver(updateColumns);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [layout]);
+
+  Children.toArray(children).forEach((child, index) => items[index % columnCount].push(child));
+  return <div ref={container} className={`notes-grid ${layout === 'list' ? 'list-view' : ''}`} style={{ '--note-columns': columnCount } as CSSProperties}>
+    {items.map((column, index) => <div className="masonry-column" key={index}>{column}</div>)}
+  </div>;
+}
+
 export function SuurApp({ initialUser, initialBranding }: { initialUser: User; initialBranding: BrandingSettings }) {
   setOfflineNamespace(initialUser.id);
   const [currentUser, setCurrentUser] = useState(initialUser);
@@ -148,6 +164,8 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
   const [labelManagerOpen, setLabelManagerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(initialUser.mustChangePassword);
   const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState(labelColors[3]);
+  const [coloringLabelId, setColoringLabelId] = useState<string | null>(null);
   const [editorNote, setEditorNote] = useState<Note | null>(null);
   const [viewerNote, setViewerNote] = useState<Note | null>(null);
   const [saveStatus, setSaveStatus] = useState('Kaydedildi');
@@ -157,7 +175,7 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionEnabled, setSelectionEnabled] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const [filters, setFilters] = useState({ color: 'all', label: 'all', date: 'all', reminder: 'all' });
   const [filterEpoch, setFilterEpoch] = useState(0);
   const [confirmation, setConfirmation] = useState<{ title: string; message: string; destructive?: boolean; action: () => void | Promise<void> } | null>(null);
@@ -593,25 +611,6 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
     openEditor(draft);
   };
 
-  const newFromTemplate = (template: 'shopping' | 'daily' | 'meeting' | 'idea') => {
-    const draft = createDraft(currentUser.id);
-    if (template === 'shopping') {
-      draft.title = ui('Alışveriş listesi', 'Shopping list'); draft.type = 'checklist';
-      draft.items = (settings.locale === 'tr' ? ['Meyve ve sebze', 'Temel ihtiyaçlar', 'Diğer'] : ['Fruit and vegetables', 'Essentials', 'Other']).map((text) => ({ id: crypto.randomUUID(), text, checked: false }));
-    } else if (template === 'daily') {
-      draft.title = ui('Günlük plan', 'Daily plan'); draft.type = 'checklist';
-      draft.items = (settings.locale === 'tr' ? ['Bugünün önceliği', 'Yapılacaklar', 'Günün notu'] : ['Today’s priority', 'To-do list', 'Notes for today']).map((text) => ({ id: crypto.randomUUID(), text, checked: false }));
-    } else if (template === 'meeting') {
-      draft.title = ui('Toplantı notu', 'Meeting notes'); draft.contentFormat = 'markdown';
-      draft.content = settings.locale === 'tr' ? '## Katılımcılar\n\n## Gündem\n\n## Kararlar\n\n## Aksiyonlar\n- [ ] ' : '## Attendees\n\n## Agenda\n\n## Decisions\n\n## Action items\n- [ ] ';
-    } else {
-      draft.title = ui('Yeni fikir', 'New idea'); draft.contentFormat = 'markdown';
-      draft.content = settings.locale === 'tr' ? '## Fikir\n\n## Neden değerli?\n\n## İlk adım\n' : '## Idea\n\n## Why it matters\n\n## First step\n';
-    }
-    setTemplatesOpen(false);
-    openEditor(draft);
-  };
-
   const patchNote = async (note: Note, patch: Partial<Note>, remove = false) => {
     const optimistic = { ...note, ...patch, version: note.version + 1, updatedAt: new Date().toISOString() };
     setNotes((items) => remove ? items.filter((item) => item.id !== note.id) : items.map((item) => item.id === note.id ? optimistic : item));
@@ -719,7 +718,7 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
     const name = newLabelName.trim();
     if (!name) return;
     try {
-      const response = await fetch('/api/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, color: '#198754' }) });
+      const response = await fetch('/api/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, color: newLabelColor }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Etiket eklenemedi.');
       const next = [...labels, data.label].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
@@ -727,6 +726,21 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
       await setCache('labels', next);
       setNewLabelName('');
     } catch (error) { showToast(error instanceof Error ? error.message : 'Etiket eklenemedi.'); }
+  };
+
+  const changeLabelColor = async (label: Label, color: string) => {
+    try {
+      const response = await fetch(`/api/labels/${label.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ color }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || t('labels.colorError'));
+      const updated = data.label as Label;
+      const nextLabels = labels.map((item) => item.id === updated.id ? updated : item);
+      setLabels(nextLabels);
+      setNotes((items) => items.map((note) => ({ ...note, labels: note.labels.map((item) => item.id === updated.id ? updated : item) })));
+      if (activeLabel?.id === updated.id) setActiveLabel(updated);
+      setColoringLabelId(null);
+      await setCache('labels', nextLabels);
+    } catch (error) { showToast(error instanceof Error ? error.message : t('labels.colorError')); }
   };
 
   const performRemoveLabel = async (label: Label) => {
@@ -804,19 +818,6 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
     window.history.replaceState(null, '', nextView === 'notes' ? location.pathname : `#${nextView}`);
   };
 
-  const navigateColor = (color: Exclude<NoteColor, 'default'>) => {
-    setView('notes');
-    setActiveLabel(null);
-    setSearch('');
-    setFilters({ color, label: 'all', date: 'all', reminder: 'all' });
-    setFilterEpoch(0);
-    setFilterOpen(false);
-    setSidebarOpen(false);
-    setSelectedIds(new Set());
-    setSelectionEnabled(false);
-    window.history.replaceState(null, '', location.pathname);
-  };
-
   const toggleSelected = (note: Note) => {
     const next = new Set(selectedIds);
     if (next.has(note.id)) next.delete(note.id); else next.add(note.id);
@@ -860,7 +861,7 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       const editing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable;
-      if (event.key === 'Escape') { setFilterOpen(false); setTemplatesOpen(false); setSelectedIds(new Set()); setSelectionEnabled(false); if (editorRef.current) closeEditor(); else setViewerNote(null); }
+      if (event.key === 'Escape') { setFilterOpen(false); setSortOpen(false); setSelectedIds(new Set()); setSelectionEnabled(false); if (editorRef.current) closeEditor(); else setViewerNote(null); }
       if (!editing && event.key === '/') { event.preventDefault(); searchInput.current?.focus(); }
       if (!editing && event.key.toLowerCase() === 'n') { event.preventDefault(); newNote(); }
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && editorRef.current) closeEditor();
@@ -902,10 +903,6 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
         </button>
       ))}
       {labels.length === 0 && <button className="nav-item quiet" onClick={() => setLabelManagerOpen(true)}><Plus size={19} /><span>{t('nav.createLabel')}</span></button>}
-      <div className="sidebar-caption"><span>{t('nav.colors').toLocaleUpperCase(settings.locale)}</span><Palette size={14} /></div>
-      <div className="sidebar-color-grid">
-        {noteColors.map((color) => <button className={`nav-color ${view === 'notes' && filters.color === color.value ? 'active' : ''}`} key={color.value} onClick={() => navigateColor(color.value)} title={ui(color.tr, color.en)} aria-label={ui(color.tr, color.en)}><span className={`nav-color-dot note-${color.value}`} /><span>{ui(color.tr, color.en)}</span></button>)}
-      </div>
       <div className="sidebar-divider" />
       <button className={`nav-item ${view === 'archive' ? 'active' : ''}`} onClick={() => navigate('archive')}><Archive size={20} /><span>{t('nav.archive')}</span></button>
       <button className={`nav-item ${view === 'trash' ? 'active' : ''}`} onClick={() => navigate('trash')}><Trash2 size={20} /><span>{t('nav.trash')}</span></button>
@@ -936,6 +933,10 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
           <span className={`connection-state ${offline ? 'offline' : ''}`} title={offline ? t('status.offline') : syncing ? t('status.syncing') : t('status.synced')}>
             {syncing ? <RefreshCw className="spin" size={17} /> : offline ? <CloudOff size={17} /> : <Cloud size={17} />}
           </span>
+          <button className={`icon-button ${sortOpen || settings.sortOrder !== 'manual' ? 'active' : ''}`} onClick={() => setSortOpen((value) => !value)} aria-label={t('sort.title')} title={t('sort.title')} aria-expanded={sortOpen}><ArrowDownUp size={19} /></button>
+          {sortOpen && <div className="sort-menu" role="menu" aria-label={t('sort.title')}>
+            {(['manual', 'updated-desc', 'updated-asc', 'created-desc', 'created-asc', 'title-asc'] as const).map((order) => <button role="menuitemradio" aria-checked={settings.sortOrder === order} className={settings.sortOrder === order ? 'selected' : ''} key={order} onClick={() => { void persistSettings({ sortOrder: order }); setSortOpen(false); }}>{t(`sort.${order}` as Parameters<typeof translate>[1])}</button>)}
+          </div>}
           <button className="icon-button layout-toggle" onClick={() => void persistSettings({ view: settings.view === 'grid' ? 'list' : 'grid' })} aria-label={settings.view === 'grid' ? ui('Liste görünümü', 'List view') : ui('Grid görünümü', 'Grid view')} title={settings.view === 'grid' ? ui('Liste görünümü', 'List view') : ui('Grid görünümü', 'Grid view')}>
             {settings.view === 'grid' ? <List size={20} /> : <Grid2X2 size={19} />}
           </button>
@@ -970,8 +971,7 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
           <div className="composer-wrap"><div className="composer" role="group" aria-label={t('newNote')}>
             <button className="composer-main" onClick={() => newNote('text')}>{t('newNote')}</button>
             <button onClick={() => newNote('checklist')} aria-label={t('newChecklist')} title={t('newChecklist')}><CheckSquareIcon /></button>
-            <button onClick={() => setTemplatesOpen((value) => !value)} aria-label={ui('Not şablonları', 'Note templates')} title={ui('Not şablonları', 'Note templates')}><LayoutTemplate size={19} /></button>
-          </div>{templatesOpen && <TemplateMenu locale={settings.locale} onChoose={newFromTemplate} />}</div>
+          </div></div>
         )}
 
         {loading ? (
@@ -990,17 +990,17 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
             {pinnedNotes.length > 0 && (
               <section className="note-section">
                 <h2 className="section-label">{t('pinned')}</h2>
-                <div className={`notes-grid ${settings.view === 'list' ? 'list-view' : ''}`}>
+                <NoteMasonry layout={settings.view}>
                   {pinnedNotes.map((note) => <NoteCard key={note.id} locale={settings.locale} note={note} currentUserId={currentUser.id} view={view} layout={settings.view} draggable={canReorder} selectionMode={selectionEnabled} selected={selectedIds.has(note.id)} collaboratorName={collaborationName(note)} onSelect={toggleSelected} onOpen={openViewer} onPatch={(item, patch, remove) => void patchNote(item, patch, remove)} onPermanentDelete={deletePermanently} onDragStart={setDraggedId} onDrop={(id) => void reorder(id)} />)}
-                </div>
+                </NoteMasonry>
               </section>
             )}
             {otherNotes.length > 0 && (
               <section className="note-section">
                 {pinnedNotes.length > 0 && <h2 className="section-label">{t('others')}</h2>}
-                <div className={`notes-grid ${settings.view === 'list' ? 'list-view' : ''}`}>
+                <NoteMasonry layout={settings.view}>
                   {otherNotes.map((note) => <NoteCard key={note.id} locale={settings.locale} note={note} currentUserId={currentUser.id} view={view} layout={settings.view} draggable={canReorder} selectionMode={selectionEnabled} selected={selectedIds.has(note.id)} collaboratorName={collaborationName(note)} onSelect={toggleSelected} onOpen={openViewer} onPatch={(item, patch, remove) => void patchNote(item, patch, remove)} onPermanentDelete={deletePermanently} onDragStart={setDraggedId} onDrop={(id) => void reorder(id)} />)}
-                </div>
+                </NoteMasonry>
               </section>
             )}
           </>
@@ -1054,11 +1054,12 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
       {labelManagerOpen && (
         <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setLabelManagerOpen(false); }}>
           <section className="label-manager" role="dialog" aria-modal="true" aria-labelledby="label-manager-title">
-            <header><div><span className="editor-kicker">DÜZENLE</span><h2 id="label-manager-title">Etiketler</h2></div><button className="toolbar-button" onClick={() => setLabelManagerOpen(false)} aria-label="Kapat"><X size={20} /></button></header>
-            <div className="new-label-row"><Tag size={18} /><input value={newLabelName} onChange={(event) => setNewLabelName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addLabel(); }} placeholder="Yeni etiket" maxLength={80} /><button onClick={() => void addLabel()} disabled={!newLabelName.trim()}><Plus size={18} /></button></div>
+            <header><div><span className="editor-kicker">{t('labels.edit')}</span><h2 id="label-manager-title">{t('nav.labels')}</h2></div><button className="toolbar-button" onClick={() => setLabelManagerOpen(false)} aria-label={t('close')}><X size={20} /></button></header>
+            <div className="new-label-row"><span className="label-dot" style={{ background: newLabelColor }} /><input value={newLabelName} onChange={(event) => setNewLabelName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addLabel(); }} placeholder={t('labels.new')} maxLength={80} /><button onClick={() => void addLabel()} disabled={!newLabelName.trim()}><Plus size={18} /></button></div>
+            <div className="label-color-palette" role="group" aria-label={t('labels.chooseColor')}>{labelColors.map((color) => <button key={color} className={newLabelColor === color ? 'selected' : ''} style={{ background: color }} onClick={() => setNewLabelColor(color)} aria-label={color}>{newLabelColor === color && <span>✓</span>}</button>)}</div>
             <div className="managed-labels">
-              {labels.map((label) => <div key={label.id}><span className="label-dot" style={{ background: label.color }} /><span>{label.name}</span><button onClick={() => void removeLabel(label)} aria-label={`${label.name} etiketini sil`}><Trash2 size={16} /></button></div>)}
-              {labels.length === 0 && <p>Notlarını gruplamak için ilk etiketini oluştur.</p>}
+              {labels.map((label) => <div key={label.id}><button className="managed-label-color" style={{ background: label.color }} onClick={() => setColoringLabelId((id) => id === label.id ? null : label.id)} aria-label={`${label.name}: ${t('labels.chooseColor')}`} /><span>{label.name}</span><button onClick={() => void removeLabel(label)} aria-label={`${t('labels.delete')}: ${label.name}`}><Trash2 size={16} /></button>{coloringLabelId === label.id && <div className="label-color-palette managed" role="group" aria-label={t('labels.chooseColor')}>{labelColors.map((color) => <button key={color} className={label.color === color ? 'selected' : ''} style={{ background: color }} onClick={() => void changeLabelColor(label, color)} aria-label={color}>{label.color === color && <span>✓</span>}</button>)}</div>}</div>)}
+              {labels.length === 0 && <p>{t('labels.empty')}</p>}
             </div>
           </section>
         </div>
@@ -1074,7 +1075,6 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
           onUserChange={setCurrentUser}
           onBrandingChange={setBranding}
           onImportComplete={() => { void loadNotes(); void reloadLabels(); }}
-          onEditLabels={() => setLabelManagerOpen(true)}
         />
       )}
 

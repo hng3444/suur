@@ -20,10 +20,9 @@ interface SettingsCenterProps {
   onUserChange: (user: User) => void;
   onBrandingChange: (branding: BrandingSettings) => void;
   onImportComplete: () => void;
-  onEditLabels: () => void;
 }
 
-export function SettingsCenter({ currentUser, settings, branding, onClose, onSettingsChange, onUserChange, onBrandingChange, onImportComplete, onEditLabels }: SettingsCenterProps) {
+export function SettingsCenter({ currentUser, settings, branding, onClose, onSettingsChange, onUserChange, onBrandingChange, onImportComplete }: SettingsCenterProps) {
   const router = useRouter();
   const [tab, setTab] = useState<SettingsTab>(currentUser.mustChangePassword ? 'profile' : 'appearance');
   const [displayName, setDisplayName] = useState(currentUser.displayName);
@@ -238,13 +237,12 @@ export function SettingsCenter({ currentUser, settings, branding, onClose, onSet
         <div className="settings-layout">
           <nav className="settings-nav" aria-label={ui('Ayar kategorileri', 'Settings categories')}>
             {!currentUser.mustChangePassword && <button className={tab === 'appearance' ? 'active' : ''} onClick={() => setTab('appearance')}><Monitor size={18} /><span>{ui('Görünüm', 'Appearance')}</span></button>}
-            <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserRound size={18} /><span>{ui('Profil', 'Profile')}</span></button>
-            {!currentUser.mustChangePassword && currentUser.role === 'superadmin' && <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}><Users size={18} /><span>{ui('Kullanıcılar', 'Users')}</span></button>}
-            {!currentUser.mustChangePassword && <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')}><DatabaseBackup size={18} /><span>{ui('Veri ve yedek', 'Data & backup')}</span></button>}
+            <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserRound size={18} /><span>{t('settings.profile')}</span></button>
+            {!currentUser.mustChangePassword && currentUser.role === 'superadmin' && <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}><Users size={18} /><span>{t('settings.users')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')}><DatabaseBackup size={18} /><span>{t('settings.data')}</span></button>}
             {!currentUser.mustChangePassword && <button className={tab === 'advanced' ? 'active' : ''} onClick={() => setTab('advanced')}><SlidersHorizontal size={18} /><span>{t('settings.advanced')}</span></button>}
-            {!currentUser.mustChangePassword && <button onClick={() => { onClose(); onEditLabels(); }}><Shield size={18} /><span>{ui('Etiketler', 'Labels')}</span></button>}
             {!currentUser.mustChangePassword && <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}><Info size={18} /><span>{t('settings.about')}</span></button>}
-            <button className="logout-nav" onClick={() => void signOut()}><LogOut size={18} /><span>{ui('Çıkış yap', 'Sign out')}</span></button>
+            <button className="logout-nav" onClick={() => void signOut()}><LogOut size={18} /><span>{t('settings.signOut')}</span></button>
           </nav>
 
           <div className="settings-content">
@@ -253,9 +251,8 @@ export function SettingsCenter({ currentUser, settings, branding, onClose, onSet
                 {([{ value: 'light', label: ui('Açık', 'Light'), icon: Sun }, { value: 'dark', label: ui('Karanlık', 'Dark'), icon: Moon }, { value: 'system', label: ui('Sistem', 'System'), icon: Monitor }] as const).map((item) => <button className={settings.theme === item.value ? 'selected' : ''} key={item.value} onClick={() => void onSettingsChange({ theme: item.value })}><item.icon size={21} /><span>{item.label}</span>{settings.theme === item.value && <Check size={15} />}</button>)}
               </div>
               <div className="setting-row"><div><strong>{ui('Not düzeni', 'Note layout')}</strong><span>{ui('Grid veya tek sütun liste', 'Grid or single-column list')}</span></div><select value={settings.view} onChange={(event) => void onSettingsChange({ view: event.target.value as 'grid' | 'list' })}><option value="grid">Grid</option><option value="list">{ui('Liste', 'List')}</option></select></div>
-              <div className="setting-row"><div><strong>{ui('Not sıralaması', 'Note order')}</strong><span>{settings.sortOrder === 'manual' ? ui('Sürükleyerek kendi sıranı oluştur', 'Drag notes into your preferred order') : ui('Seçilen kurala göre otomatik sırala', 'Automatically order notes by the selected rule')}</span></div><select value={settings.sortOrder} onChange={(event) => void onSettingsChange({ sortOrder: event.target.value as AppSettings['sortOrder'] })}><option value="manual">{ui('Özel sıralama', 'Custom order')}</option><option value="updated-desc">{ui('Son düzenlenenler', 'Recently updated')}</option><option value="updated-asc">{ui('En eski düzenlenenler', 'Least recently updated')}</option><option value="created-desc">{ui('En yeni oluşturulanlar', 'Newest created')}</option><option value="created-asc">{ui('En eski oluşturulanlar', 'Oldest created')}</option><option value="title-asc">{ui('Başlığa göre A–Z', 'Title A–Z')}</option></select></div>
               <div className="setting-row"><div><strong><Languages size={16} /> {t('settings.language')}</strong><span>{t('settings.languageHelp')}</span></div><select value={settings.locale} onChange={(event) => void onSettingsChange({ locale: event.target.value as AppSettings['locale'] })}>{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select></div>
-              <div className="setting-row accent-setting"><div><strong>{ui('Vurgu rengi', 'Accent color')}</strong><span>{ui('Düğmeler ve seçili alanlar', 'Buttons and selected areas')}</span></div><div className="accent-options">{(['forest', 'emerald', 'teal', 'blue', 'violet', 'amber'] as const).map((accent) => <button key={accent} className={`accent-${accent} ${settings.accent === accent ? 'selected' : ''}`} onClick={() => void onSettingsChange({ accent })} aria-label={accent}>{settings.accent === accent && <Check size={13} />}</button>)}</div></div>
+              <div className="setting-row accent-setting"><div><strong>{ui('Vurgu rengi', 'Accent color')}</strong><span>{ui('Düğmeler ve seçili alanlar', 'Buttons and selected areas')}</span></div><div className="accent-options">{(['forest', 'blue', 'violet', 'amber', 'rose', 'graphite'] as const).map((accent) => <button key={accent} className={`accent-${accent} ${settings.accent === accent ? 'selected' : ''}`} onClick={() => void onSettingsChange({ accent })} aria-label={accent}>{settings.accent === accent && <Check size={13} />}</button>)}</div></div>
               <div className="setting-row background-setting"><div><strong>{ui('Arka plan tonu', 'Background tone')}</strong><span>{ui('Çalışma alanının temel rengini seç', 'Choose the base color of the workspace')}</span></div><div className="background-options">{([{ value: 'neutral', label: ui('Nötr', 'Neutral') }, { value: 'sage', label: ui('Adaçayı', 'Sage') }, { value: 'warm', label: ui('Sıcak', 'Warm') }, { value: 'blue', label: ui('Mavi', 'Blue') }, { value: 'rose', label: ui('Gül', 'Rose') }] as const).map((tone) => <button key={tone.value} className={`background-${tone.value} ${settings.backgroundTone === tone.value ? 'selected' : ''}`} onClick={() => void onSettingsChange({ backgroundTone: tone.value })} aria-label={tone.label} title={tone.label}>{settings.backgroundTone === tone.value && <Check size={13} />}</button>)}</div></div>
             </section>}
 
@@ -305,7 +302,7 @@ export function SettingsCenter({ currentUser, settings, branding, onClose, onSet
             {tab === 'about' && <section className="settings-panel about-panel"><h3>{t('settings.about')}</h3><p>{ui('Uygulamanın değiştirilemeyen özgün kimliği ve iletişim bilgileri.', 'The application’s immutable original identity and contact details.')}</p>
               <div className="about-brand"><BrandMark branding={branding} original /><div><span>{t('about.original')}</span><strong>Suur</strong><small>Private, self-hosted notes</small></div></div>
               <p className="about-attribution">{t('about.attribution')}</p>
-              <dl className="about-details"><div><dt>{ui('Sürüm', 'Version')}</dt><dd>0.2.0</dd></div><div><dt>{t('about.contact')}</dt><dd><a href="mailto:hng3444@gmail.com">hng3444@gmail.com</a></dd></div><div><dt>{ui('Lisans', 'License')}</dt><dd>Open source</dd></div></dl>
+              <dl className="about-details"><div><dt>{t('about.version')}</dt><dd>0.1.2</dd></div><div><dt>{t('about.contact')}</dt><dd><a href="mailto:hng3444@gmail.com">hng3444@gmail.com</a></dd></div><div><dt>{t('about.source')}</dt><dd><a href="https://github.com/hng3444/suur" target="_blank" rel="noreferrer">github.com/hng3444/suur</a></dd></div><div><dt>{t('about.license')}</dt><dd>Open source</dd></div><div><dt>{t('about.storage')}</dt><dd>{t('about.storageValue')}</dd></div></dl>
               <p className="about-note">{ui('Superadmin uygulamanın görünen adını ve simgesini değiştirebilir; bu bölümdeki orijinal Suur bilgisi değişmez.', 'A superadmin may change the displayed app name and icon; the original Suur identity in this section never changes.')}</p>
             </section>}
           </div>

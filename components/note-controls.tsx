@@ -14,20 +14,17 @@ export interface NoteFilters {
 const colors: NoteColor[] = ['default', 'mint', 'sage', 'sand', 'rose', 'sky', 'lavender'];
 
 export function NoteFilterPanel({ locale, labels, filters, onChange, onClear, onClose }: { locale: Locale; labels: Label[]; filters: NoteFilters; onChange: (filters: NoteFilters) => void; onClear: () => void; onClose: () => void }) {
-  const tr = locale === 'tr';
+  const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(locale, key, values);
   const activeCount = Object.values(filters).filter((value) => value !== 'all').length;
-  const colorNames: Record<string, string> = tr
-    ? { default: 'Varsayılan', mint: 'Nane', sage: 'Adaçayı', sand: 'Kum', rose: 'Gül', sky: 'Gökyüzü', lavender: 'Lavanta' }
-    : { default: 'Default', mint: 'Mint', sage: 'Sage', sand: 'Sand', rose: 'Rose', sky: 'Sky', lavender: 'Lavender' };
-  return <section className="filter-panel" aria-label={tr ? 'Notları filtrele' : 'Filter notes'}>
-    <header><div><strong>{tr ? 'Notları filtrele' : 'Filter notes'}</strong><span>{activeCount ? `${activeCount} ${tr ? 'filtre etkin' : 'active filters'}` : tr ? 'Sonuçları daralt' : 'Narrow the results'}</span></div><button onClick={onClose} aria-label={translate(locale, 'close')}><X size={18} /></button></header>
-    <div className="filter-colors" role="group" aria-label={tr ? 'Renk' : 'Color'}>{colors.map((color) => <button key={color} className={`filter-color note-${color} ${filters.color === color ? 'selected' : ''}`} onClick={() => onChange({ ...filters, color })} title={colorNames[color]} aria-label={colorNames[color]}>{filters.color === color && <Check size={13} />}</button>)}</div>
+  return <section className="filter-panel" aria-label={t('filter.title')}>
+    <header><div><strong>{t('filter.title')}</strong><span>{activeCount ? t('filter.active', { count: activeCount }) : t('filter.hint')}</span></div><button onClick={onClose} aria-label={translate(locale, 'close')}><X size={18} /></button></header>
+    <div className="filter-colors" role="group" aria-label={t('filter.color')}>{colors.map((color) => <button key={color} className={`filter-color note-${color} ${filters.color === color ? 'selected' : ''}`} onClick={() => onChange({ ...filters, color })} title={t(`color.${color}` as Parameters<typeof translate>[1])} aria-label={t(`color.${color}` as Parameters<typeof translate>[1])}>{filters.color === color && <Check size={13} />}</button>)}</div>
     <div className="filter-fields">
-      <label><span>{tr ? 'Etiket' : 'Label'}</span><select value={filters.label} onChange={(event) => onChange({ ...filters, label: event.target.value })}><option value="all">{tr ? 'Tüm etiketler' : 'All labels'}</option>{labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>
-      <label><span>{tr ? 'Değiştirilme tarihi' : 'Updated'}</span><select value={filters.date} onChange={(event) => onChange({ ...filters, date: event.target.value })}><option value="all">{tr ? 'Her zaman' : 'Any time'}</option><option value="today">{tr ? 'Son 24 saat' : 'Last 24 hours'}</option><option value="week">{tr ? 'Son 7 gün' : 'Last 7 days'}</option><option value="month">{tr ? 'Son 30 gün' : 'Last 30 days'}</option></select></label>
-      <label><span>{tr ? 'Hatırlatıcı' : 'Reminder'}</span><select value={filters.reminder} onChange={(event) => onChange({ ...filters, reminder: event.target.value })}><option value="all">{tr ? 'Tümü' : 'All'}</option><option value="yes">{tr ? 'Olanlar' : 'With reminder'}</option><option value="no">{tr ? 'Olmayanlar' : 'Without reminder'}</option></select></label>
+      <label><span>{t('filter.label')}</span><select value={filters.label} onChange={(event) => onChange({ ...filters, label: event.target.value })}><option value="all">{t('filter.allLabels')}</option>{labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>
+      <label><span>{t('filter.updated')}</span><select value={filters.date} onChange={(event) => onChange({ ...filters, date: event.target.value })}><option value="all">{t('filter.anyTime')}</option><option value="today">{t('filter.today')}</option><option value="week">{t('filter.week')}</option><option value="month">{t('filter.month')}</option></select></label>
+      <label><span>{t('filter.reminder')}</span><select value={filters.reminder} onChange={(event) => onChange({ ...filters, reminder: event.target.value })}><option value="all">{t('filter.all')}</option><option value="yes">{t('filter.withReminder')}</option><option value="no">{t('filter.withoutReminder')}</option></select></label>
     </div>
-    {activeCount > 0 && <button className="filter-clear" onClick={onClear}>{tr ? 'Tüm filtreleri temizle' : 'Clear all filters'}</button>}
+    {activeCount > 0 && <button className="filter-clear" onClick={onClear}>{t('filter.clear')}</button>}
   </section>;
 }
 
@@ -38,15 +35,4 @@ export function BulkToolbar({ locale, view, count, canDelete, labels, onArchive,
     {view === 'trash' ? <><button disabled={disabled} onClick={onRestore}><ArchiveRestore size={16} /> {translate(locale, 'restore')}</button><button className="danger" disabled={disabled || !canDelete} title={!canDelete ? (tr ? 'Yalnızca sahibi olduğunuz notlar kalıcı silinebilir.' : 'Only notes you own can be permanently deleted.') : ''} onClick={onDeleteForever}><Trash2 size={16} /> {translate(locale, 'deleteForever')}</button></> : <><button disabled={disabled} onClick={onArchive}>{view === 'archive' ? <ArchiveRestore size={16} /> : <Archive size={16} />} {view === 'archive' ? translate(locale, 'unarchive') : translate(locale, 'archive')}</button><button disabled={disabled} onClick={onTrash}><Trash2 size={16} /> {tr ? 'Sil' : 'Delete'}</button></>}
     <label className="bulk-label"><Tag size={15} /><select aria-label={tr ? 'Etiket ekle' : 'Add label'} disabled={disabled} value="" onChange={(event) => onAddLabel(event.target.value)}><option value="">{tr ? 'Etiket ekle…' : 'Add label…'}</option>{labels.map((label) => <option value={label.id} key={label.id}>{label.name}</option>)}</select></label>
   </div><button className="bulk-close" onClick={onClose} aria-label={translate(locale, 'close')}><X size={18} /></button></div>;
-}
-
-export function TemplateMenu({ locale, onChoose }: { locale: Locale; onChoose: (template: 'shopping' | 'daily' | 'meeting' | 'idea') => void }) {
-  const tr = locale === 'tr';
-  const items = [
-    { id: 'shopping' as const, icon: '🛒', title: tr ? 'Alışveriş' : 'Shopping', help: tr ? 'Hazır checklist' : 'Ready-made checklist' },
-    { id: 'daily' as const, icon: '☀️', title: tr ? 'Günlük plan' : 'Daily plan', help: tr ? 'Öncelikler ve işler' : 'Priorities and tasks' },
-    { id: 'meeting' as const, icon: '👥', title: tr ? 'Toplantı' : 'Meeting', help: tr ? 'Gündem ve kararlar' : 'Agenda and decisions' },
-    { id: 'idea' as const, icon: '💡', title: tr ? 'Fikir' : 'Idea', help: tr ? 'Fikri hızlı geliştir' : 'Develop an idea quickly' },
-  ];
-  return <div className="template-menu">{items.map((item) => <button key={item.id} onClick={() => onChoose(item.id)}>{item.icon}<span><strong>{item.title}</strong><small>{item.help}</small></span></button>)}</div>;
 }

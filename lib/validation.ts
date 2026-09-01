@@ -67,7 +67,7 @@ export const settingsSchema = z.object({
   backgroundTone: z.enum(['neutral', 'sage', 'warm', 'blue', 'rose']).optional(),
   sidebarCollapsed: z.boolean().optional(),
   locale: z.enum(['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt', 'ru', 'tr']).optional(),
-  accent: z.enum(['forest', 'emerald', 'teal', 'blue', 'violet', 'amber']).optional(),
+  accent: z.enum(['forest', 'emerald', 'teal', 'blue', 'violet', 'amber', 'rose', 'graphite']).optional(),
   notificationsEnabled: z.boolean().optional(),
   backupFrequency: z.enum(['off', 'daily', 'weekly']).optional(),
   trashRetentionDays: z.number().int().min(1).max(365).optional(),

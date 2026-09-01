@@ -55,7 +55,7 @@ export interface AppSettings {
   backgroundTone: BackgroundTone;
   sidebarCollapsed: boolean;
   locale: Locale;
-  accent: 'forest' | 'emerald' | 'teal' | 'blue' | 'violet' | 'amber';
+  accent: 'forest' | 'emerald' | 'teal' | 'blue' | 'violet' | 'amber' | 'rose' | 'graphite';
   notificationsEnabled: boolean;
   backupFrequency: 'off' | 'daily' | 'weekly';
   trashRetentionDays: number;

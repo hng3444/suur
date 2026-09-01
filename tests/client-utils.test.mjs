@@ -4,7 +4,7 @@ import { hasActiveFilters, plainTextPreview, reconcileEditorSave, sortNotes } fr
 import { syncDecision } from '../lib/sync-policy.ts';
 import { compactOperations, sanitizeQueuedOperation } from '../lib/offline.ts';
 import { noteUpdateSchema } from '../lib/validation.ts';
-import { languages, translate } from '../lib/i18n.ts';
+import { languages, missingTranslationKeys, translate } from '../lib/i18n.ts';
 
 test('Markdown card previews do not expose formatting markers', () => {
   assert.equal(plainTextPreview('## Plan\n- [Docs](https://example.com)\n- **Ship**'), 'Plan Docs Ship');
@@ -89,4 +89,15 @@ test('the immutable About attribution exists in every supported language', () =>
     assert.ok(attribution.includes('H. N. Güleroğlu'));
     assert.ok(attribution.length > 20);
   }
+});
+
+test('sorting, filtering, settings and About metadata are translated in every supported language', () => {
+  const keys = ['sort.title', 'sort.updated-desc', 'filter.title', 'filter.clear', 'settings.signOut', 'about.source'];
+  for (const language of languages.filter((item) => item.value !== 'en')) {
+    for (const key of keys) assert.notEqual(translate(language.value, key), translate('en', key), `${language.value}: ${key}`);
+  }
+});
+
+test('every registered interface message has a translation in all supported languages', () => {
+  for (const language of languages) assert.deepEqual(missingTranslationKeys(language.value), [], language.value);
 });
