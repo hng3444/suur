@@ -1,6 +1,6 @@
-# Suur — private, self-hosted notes that work offline
+# Suur — Open-source, self-hosted Google Keep alternative
 
-Suur is a fast, multilingual, self-hosted note-taking app for people who like the simplicity of Google Keep but want full control of their data.
+Suur is an offline-first, self-hosted note-taking app inspired by the simplicity of Google Keep. Run it with Docker or CasaOS and keep full control of your notes and data.
 
 It runs as a single Docker container, stores persistent data in SQLite under `/data`, installs as a PWA, and keeps text and checklist edits available when the network drops.
 
