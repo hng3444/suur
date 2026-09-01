@@ -19,6 +19,10 @@ export function profileUploadsDirectory() {
   return path.join(/* turbopackIgnore: true */ uploadsDirectory(), 'profiles');
 }
 
+export function brandingUploadsDirectory() {
+  return path.join(/* turbopackIgnore: true */ uploadsDirectory(), 'branding');
+}
+
 function passwordHash(password: string) {
   const salt = randomBytes(16);
   const derived = scryptSync(password, salt, 64, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
@@ -90,6 +94,7 @@ function migrateLabelUniqueness(database: Database.Database) {
 
 function initializeDatabase() {
   mkdirSync(profileUploadsDirectory(), { recursive: true });
+  mkdirSync(brandingUploadsDirectory(), { recursive: true });
   const database = new Database(path.join(/* turbopackIgnore: true */ dataDirectory(), 'suur.db'));
 
   database.pragma('journal_mode = WAL');

@@ -7,7 +7,7 @@ import { noteCreateSchema } from '@/lib/validation';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const views = new Set<NoteView>(['notes', 'reminders', 'calendar', 'archive', 'trash']);
+const views = new Set<NoteView>(['notes', 'reminders', 'calendar', 'shared', 'archive', 'trash']);
 
 export async function GET(request: NextRequest) {
   const user = await requireApiUser();

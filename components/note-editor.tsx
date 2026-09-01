@@ -2,15 +2,18 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Archive,
   ArchiveRestore,
   Bell,
+  CheckCircle2,
   CheckSquare,
   Code2,
   Download,
   Eye,
   FileText,
   ListTodo,
+  LoaderCircle,
   Mic,
   Paperclip,
   Pin,
@@ -25,7 +28,13 @@ import {
 } from 'lucide-react';
 import { translate } from '@/lib/i18n';
 import { MarkdownView } from '@/components/markdown-view';
+import { audioFilenameExtension, baseMimeType, preferredAudioRecordingMime } from '@/lib/media-utils';
 import type { ChecklistItem, Label, Locale, Note, NoteColor, NoteView, UserSummary } from '@/lib/types';
+
+export interface UploadFeedback {
+  state: 'uploading' | 'success' | 'error';
+  message: string;
+}
 
 interface NoteEditorProps {
   note: Note;
@@ -34,6 +43,7 @@ interface NoteEditorProps {
   offline: boolean;
   users: UserSummary[];
   completedItemsBottom: boolean;
+  notificationsEnabled: boolean;
   labels: Label[];
   view: NoteView;
   saveStatus: string;
@@ -43,7 +53,9 @@ interface NoteEditorProps {
   onTrash: () => void;
   onRestore: () => void;
   onPermanentDelete: () => void;
-  onUpload: (file: File) => void;
+  uploadFeedback: UploadFeedback | null;
+  onUpload: (file: File) => Promise<boolean>;
+  onEnableNotifications: () => Promise<void>;
   onDeleteAttachment: (id: string) => void;
 }
 
@@ -71,6 +83,7 @@ export function NoteEditor({
   offline,
   users,
   completedItemsBottom,
+  notificationsEnabled,
   labels,
   view,
   saveStatus,
@@ -80,7 +93,9 @@ export function NoteEditor({
   onTrash,
   onRestore,
   onPermanentDelete,
+  uploadFeedback,
   onUpload,
+  onEnableNotifications,
   onDeleteAttachment,
 }: NoteEditorProps) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -89,7 +104,10 @@ export function NoteEditor({
   const [recording, setRecording] = useState(false);
   const [preview, setPreview] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [mediaError, setMediaError] = useState('');
+  const [voiceState, setVoiceState] = useState<'idle' | 'requesting' | 'recording' | 'processing' | 'success' | 'error'>('idle');
+  const [voiceMessage, setVoiceMessage] = useState('');
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [reminderNotice, setReminderNotice] = useState('');
   const readOnly = view === 'trash';
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const ui = (turkish: string, english: string) => locale === 'tr' ? turkish : english;
@@ -97,6 +115,12 @@ export function NoteEditor({
   const otherAttachments = note.attachments.filter((attachment) => !attachment.mimeType.startsWith('image/'));
 
   useEffect(() => () => voiceStream.current?.getTracks().forEach((track) => track.stop()), []);
+
+  useEffect(() => {
+    if (!recording) return;
+    const timer = window.setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1_000);
+    return () => window.clearInterval(timer);
+  }, [recording]);
 
   const updateItem = (id: string, patch: Partial<ChecklistItem>) => {
     const items = note.items.map((item) => item.id === id ? { ...item, ...patch } : item);
@@ -113,32 +137,93 @@ export function NoteEditor({
     onChange({ ...note, labels: selected ? note.labels.filter((item) => item.id !== label.id) : [...note.labels, label] });
   };
 
-  const uploadFiles = (files: FileList | File[]) => {
-    for (const file of Array.from(files)) onUpload(file);
+  const uploadFiles = async (files: FileList | File[]) => {
+    for (const file of Array.from(files)) await onUpload(file);
+  };
+
+  const microphoneError = (error: unknown) => {
+    const name = error instanceof DOMException ? error.name : '';
+    if (name === 'NotFoundError') return ui('Bu cihazda kullanılabilir mikrofon bulunamadı.', 'No available microphone was found on this device.');
+    if (name === 'NotReadableError') return ui('Mikrofon başka bir uygulama tarafından kullanılıyor.', 'The microphone is being used by another app.');
+    if (name === 'SecurityError') return ui('Mikrofon için HTTPS bağlantısı gerekiyor.', 'A secure HTTPS connection is required for microphone access.');
+    return ui('Mikrofon izni verilmedi. Tarayıcı site ayarlarından mikrofonu açabilirsiniz.', 'Microphone permission was not granted. You can enable it in the browser site settings.');
   };
 
   const toggleVoice = async () => {
     if (recording) { recorder.current?.stop(); return; }
-    if (offline) { setMediaError(ui('Sesli not eklemek için sunucu bağlantısı gerekiyor.', 'A server connection is required to attach a voice note.')); return; }
-    if (!navigator.mediaDevices?.getUserMedia || !('MediaRecorder' in window)) { setMediaError(ui('Bu tarayıcı ses kaydını desteklemiyor.', 'This browser does not support audio recording.')); return; }
+    if (offline) { setVoiceState('error'); setVoiceMessage(ui('Sesli not eklemek için sunucu bağlantısı gerekiyor.', 'A server connection is required to attach a voice note.')); return; }
+    if (!window.isSecureContext) { setVoiceState('error'); setVoiceMessage(ui('Mikrofon için HTTPS bağlantısı gerekiyor.', 'A secure HTTPS connection is required for microphone access.')); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !('MediaRecorder' in window)) { setVoiceState('error'); setVoiceMessage(ui('Bu tarayıcı ses kaydını desteklemiyor.', 'This browser does not support audio recording.')); return; }
+    setVoiceState('requesting');
+    setVoiceMessage(ui('Mikrofon izni bekleniyor…', 'Waiting for microphone permission…'));
     let stream: MediaStream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch { setMediaError(ui('Mikrofon izni verilmedi.', 'Microphone permission was not granted.')); return; }
-    setMediaError('');
+    catch (error) { setVoiceState('error'); setVoiceMessage(microphoneError(error)); return; }
     voiceStream.current = stream;
     const chunks: Blob[] = [];
-    const mediaRecorder = new MediaRecorder(stream);
+    const selectedMime = preferredAudioRecordingMime((type) => typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type));
+    let mediaRecorder: MediaRecorder;
+    try { mediaRecorder = selectedMime ? new MediaRecorder(stream, { mimeType: selectedMime }) : new MediaRecorder(stream); }
+    catch {
+      try { mediaRecorder = new MediaRecorder(stream); }
+      catch (error) {
+        stream.getTracks().forEach((track) => track.stop());
+        voiceStream.current = null;
+        setVoiceState('error');
+        setVoiceMessage(microphoneError(error));
+        return;
+      }
+    }
     recorder.current = mediaRecorder;
     mediaRecorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-    mediaRecorder.onstop = () => {
-      const mimeType = mediaRecorder.mimeType || 'audio/webm';
-      onUpload(new File(chunks, `voice-note-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`, { type: mimeType }));
+    mediaRecorder.onerror = () => {
+      setVoiceState('error');
+      setVoiceMessage(ui('Ses kaydı tamamlanamadı.', 'The audio recording could not be completed.'));
+    };
+    mediaRecorder.onstop = async () => {
       stream.getTracks().forEach((track) => track.stop());
       voiceStream.current = null;
+      recorder.current = null;
       setRecording(false);
+      setVoiceState('processing');
+      setVoiceMessage(ui('Ses kaydı hazırlanıyor…', 'Preparing the audio recording…'));
+      const mimeType = baseMimeType(mediaRecorder.mimeType || selectedMime || chunks[0]?.type) || 'audio/webm';
+      const extension = audioFilenameExtension(mimeType);
+      const file = new File(chunks, `voice-note-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`, { type: mimeType });
+      if (!file.size) {
+        setVoiceState('error');
+        setVoiceMessage(ui('Ses kaydı boş kaldı. Yeniden deneyin.', 'The audio recording was empty. Please try again.'));
+        return;
+      }
+      const uploaded = await onUpload(file);
+      setVoiceState(uploaded ? 'success' : 'error');
+      setVoiceMessage(uploaded ? ui('Sesli not eklendi.', 'Voice note added.') : ui('Sesli not yüklenemedi.', 'The voice note could not be uploaded.'));
     };
-    mediaRecorder.start();
+    mediaRecorder.start(1_000);
+    setRecordingSeconds(0);
     setRecording(true);
+    setVoiceState('recording');
+    setVoiceMessage(ui('Kayıt sürüyor', 'Recording'));
+  };
+
+  const requestReminderPermission = async () => {
+    if (!('Notification' in window)) {
+      setReminderNotice(ui('Bu tarayıcı bildirimleri desteklemiyor; hatırlatıcı yine kaydedildi.', 'This browser does not support notifications; the reminder was still saved.'));
+      return;
+    }
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      setReminderNotice(ui('Bildirim izni bekleniyor…', 'Waiting for notification permission…'));
+      try { permission = await Notification.requestPermission(); }
+      catch { permission = 'denied'; }
+    }
+    if (permission === 'granted') {
+      if (!notificationsEnabled) await onEnableNotifications();
+      setReminderNotice(ui('Bildirimler açık. Hatırlatıcı zamanı gelince haber verilecek.', 'Notifications are on. You will be notified when the reminder is due.'));
+      if ('serviceWorker' in navigator) void navigator.serviceWorker.ready.then((registration) => registration.active?.postMessage({ type: 'CHECK_REMINDERS' }));
+      return;
+    }
+    setReminderNotice(ui('Hatırlatıcı kaydedildi; bildirim için tarayıcı site ayarlarından izni açın.', 'The reminder was saved; enable notifications in the browser site settings to receive an alert.'));
   };
 
   return (
@@ -169,6 +254,8 @@ export function NoteEditor({
         )}
 
         {otherAttachments.length > 0 && <div className="editor-files">{otherAttachments.map((attachment) => attachment.mimeType.startsWith('audio/') ? <div className="editor-audio" key={attachment.id}><audio controls preload="metadata" src={attachment.url} /><span>{attachment.filename}</span>{!readOnly && <button onClick={() => onDeleteAttachment(attachment.id)} aria-label={attachment.filename}><X size={15} /></button>}</div> : <div key={attachment.id}><FileText size={18} /><span>{attachment.filename}<small>{(attachment.size / 1024).toFixed(0)} KB</small></span><a href={attachment.url} download={attachment.filename} aria-label={attachment.filename}><Download size={16} /></a>{!readOnly && <button onClick={() => onDeleteAttachment(attachment.id)} aria-label={attachment.filename}><X size={15} /></button>}</div>)}</div>}
+
+        {uploadFeedback && <div className={`editor-upload-feedback ${uploadFeedback.state}`} role="status">{uploadFeedback.state === 'uploading' ? <LoaderCircle className="spin" size={17} /> : uploadFeedback.state === 'success' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}<span>{uploadFeedback.message}</span></div>}
 
         <input
           id="note-editor-title"
@@ -220,7 +307,8 @@ export function NoteEditor({
 
         {!readOnly && (
           <div className="editor-options">
-            {(offline || mediaError) && <p className="editor-inline-warning">{mediaError || ui('Metin değişiklikleri çevrimdışı kaydedilir. Dosya ve ses eklemek için bağlantı gerekir.', 'Text changes are saved offline. Attachments and voice notes require a connection.')}</p>}
+            {offline && <p className="editor-inline-warning">{ui('Metin değişiklikleri çevrimdışı kaydedilir. Dosya ve ses eklemek için bağlantı gerekir.', 'Text changes are saved offline. Attachments and voice notes require a connection.')}</p>}
+            {voiceState !== 'idle' && <p className={`editor-inline-status ${voiceState}`} role="status">{voiceState === 'requesting' || voiceState === 'processing' ? <LoaderCircle className="spin" size={16} /> : voiceState === 'success' ? <CheckCircle2 size={16} /> : voiceState === 'error' ? <AlertCircle size={16} /> : <Mic size={16} />}<span>{voiceMessage}{voiceState === 'recording' ? ` · ${String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:${String(recordingSeconds % 60).padStart(2, '0')} · ${ui('Bitirmek için mikrofona yeniden dokunun', 'Tap the microphone again to stop')}` : ''}</span></p>}
             <div className="option-row">
               <Bell size={17} />
               <label htmlFor="reminder">{t('editor.reminder')}</label>
@@ -228,9 +316,10 @@ export function NoteEditor({
                 id="reminder"
                 type="datetime-local"
                 value={localDateTime(note.reminderAt)}
-                onChange={(event) => onChange({ ...note, reminderAt: event.target.value ? new Date(event.target.value).toISOString() : null })}
+                onChange={(event) => { const reminderAt = event.target.value ? new Date(event.target.value).toISOString() : null; onChange({ ...note, reminderAt }); if (reminderAt) void requestReminderPermission(); else setReminderNotice(''); }}
               />
             </div>
+            {reminderNotice && <p className="reminder-permission-status" role="status"><Bell size={14} /><span>{reminderNotice}</span></p>}
 
             <div className="option-row">
               <UserRound size={17} />
@@ -271,7 +360,7 @@ export function NoteEditor({
                 <button className="toolbar-button" onClick={() => onChange({ ...note, type: 'text' })} aria-label={t('editor.text')} title={t('editor.text')}><Type size={18} /></button>
                 <button className="toolbar-button" onClick={() => onChange({ ...note, type: 'checklist', items: note.items.length ? note.items : [{ id: crypto.randomUUID(), text: '', checked: false }] })} aria-label={t('editor.checklist')} title={t('editor.checklist')}><ListTodo size={18} /></button>
                 <button className="toolbar-button" disabled={offline} onClick={() => fileInput.current?.click()} aria-label={t('editor.attachment')} title={offline ? ui('Çevrimdışıyken dosya eklenemez', 'Attachments are unavailable offline') : t('editor.attachment')}><Paperclip size={18} /><span className="tool-label">{ui('Dosya', 'File')}</span></button>
-                <input ref={fileInput} hidden multiple type="file" accept="image/*,audio/*,application/pdf,text/plain,text/markdown,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods" onChange={(event) => { if (event.target.files) uploadFiles(event.target.files); event.target.value = ''; }} />
+                <input ref={fileInput} hidden multiple type="file" accept="image/*,audio/*,application/pdf,text/plain,text/markdown,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />
                 <button className={`toolbar-button ${recording ? 'recording' : ''}`} disabled={offline} onClick={() => void toggleVoice()} aria-label={ui('Sesli not', 'Voice note')} title={recording ? ui('Kaydı bitir', 'Stop recording') : ui('Sesli not', 'Voice note')}><Mic size={18} /><span className="tool-label">{ui('Ses', 'Voice')}</span></button>
                 {note.type === 'text' && <button className={`toolbar-button ${note.contentFormat === 'markdown' ? 'active' : ''}`} onClick={() => { onChange({ ...note, contentFormat: note.contentFormat === 'markdown' ? 'plain' : 'markdown' }); setPreview(false); }} aria-label="Markdown" title="Markdown"><Code2 size={18} /></button>}
                 {note.type === 'text' && note.contentFormat === 'markdown' && <button className={`toolbar-button ${preview ? 'active' : ''}`} onClick={() => setPreview((value) => !value)} aria-label={ui('Önizleme', 'Preview')} title={ui('Önizleme', 'Preview')}><Eye size={18} /></button>}
@@ -286,7 +375,7 @@ export function NoteEditor({
             )}
           </div>
           <span className="save-status">{readOnly ? '' : saveStatus}</span>
-          <button className="close-button" onClick={onClose}>{t('close')}</button>
+          <button className="save-button" onClick={onClose}>{readOnly ? t('close') : t('save')}</button>
         </footer>
       </section>
     </div>

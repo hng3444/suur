@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, ArchiveRestore, Bell, Check, GripVertical, Pin, PinOff, Trash2, Undo2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Bell, Check, GripVertical, Pin, PinOff, Trash2, Undo2, Users } from 'lucide-react';
 import { translate } from '@/lib/i18n';
 import { plainTextPreview } from '@/lib/client-utils';
 import type { Locale, Note, NoteView } from '@/lib/types';
@@ -14,6 +14,7 @@ interface NoteCardProps {
   draggable: boolean;
   selectionMode: boolean;
   selected: boolean;
+  collaboratorName?: string;
   onSelect: (note: Note) => void;
   onOpen: (note: Note) => void;
   onPatch: (note: Note, patch: Partial<Note>, remove?: boolean) => void;
@@ -40,6 +41,7 @@ export function NoteCard({
   draggable,
   selectionMode,
   selected,
+  collaboratorName,
   onSelect,
   onOpen,
   onPatch,
@@ -54,7 +56,7 @@ export function NoteCard({
 
   return (
     <article
-      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${selected ? 'selected' : ''}`}
+      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${selectionMode ? 'selection-mode' : ''} ${selected ? 'selected' : ''}`}
       onClick={() => selectionMode ? onSelect(note) : onOpen(note)}
       onContextMenu={(event) => { event.preventDefault(); onSelect(note); }}
       draggable={draggable}
@@ -65,14 +67,14 @@ export function NoteCard({
       onKeyDown={(event) => { if (event.key === 'Enter') { if (selectionMode) onSelect(note); else onOpen(note); } }}
       aria-label={note.title || t('untitled')}
     >
-      {selectionMode && <button className="note-select" onClick={(event) => { event.stopPropagation(); onSelect(note); }} aria-label={selected ? ui('Seçimi kaldır', 'Clear selection') : ui('Notu seç', 'Select note')}>{selected && <Check size={15} />}</button>}
+      <button className="note-select" aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onSelect(note); }} aria-label={selected ? ui('Seçimi kaldır', 'Clear selection') : ui('Notu seç', 'Select note')}>{selected && <Check size={15} />}</button>
       {cover && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="note-cover" src={cover.url} alt={cover.filename} loading="lazy" />
       )}
       <div className="note-card-body">
         <div className="note-card-heading">
-          <h2>{note.title || t('untitled')}</h2>
+          {note.title && <h2>{note.title}</h2>}
           {draggable && <GripVertical className="drag-handle" size={17} aria-hidden="true" />}
         </div>
         {note.type === 'checklist' ? (
@@ -88,8 +90,9 @@ export function NoteCard({
           note.content && <p className="note-content">{note.contentFormat === 'markdown' ? plainTextPreview(note.content) : note.content}</p>
         )}
 
-        {(note.reminderAt || note.labels.length > 0) && (
+        {(note.reminderAt || note.labels.length > 0 || collaboratorName) && (
           <div className="note-chips">
+            {collaboratorName && <span className="note-chip collaboration-chip"><Users size={12} />{collaboratorName}</span>}
             {note.reminderAt && <span className="note-chip"><Bell size={12} />{reminderText(note.reminderAt, locale)}</span>}
             {note.labels.map((label) => <span className="note-chip" key={label.id}>{label.name}</span>)}
           </div>

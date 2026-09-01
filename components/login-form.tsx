@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LockKeyhole, LogIn } from 'lucide-react';
 import { languages, normalizeLocale, translate } from '@/lib/i18n';
 import type { Locale } from '@/lib/types';
+import type { BrandingSettings } from '@/lib/types';
+import { BrandMark } from '@/components/brand-mark';
 
-export function LoginForm() {
+export function LoginForm({ branding }: { branding: BrandingSettings }) {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -46,7 +48,7 @@ export function LoginForm() {
     <main className="login-page">
       <section className="login-stage">
         <header className="login-header">
-          <div className="login-brand"><span className="brand-logo" aria-hidden="true" /><strong>Suur</strong></div>
+          <div className="login-brand"><BrandMark branding={branding} /><strong>{branding.appName}</strong></div>
           <select className="login-language" value={locale} aria-label="Language" onChange={(event) => { const value = event.target.value as Locale; setLocale(value); window.localStorage.setItem('suur-locale', value); }}>{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select>
         </header>
 

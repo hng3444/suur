@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getDb } from '@/lib/db';
-import type { AppSettings, Attachment, ChecklistItem, Label, Note, NoteView } from '@/lib/types';
+import type { AppSettings, Attachment, BrandingSettings, ChecklistItem, Label, Note, NoteView } from '@/lib/types';
 
 interface NoteRow {
   id: string;
@@ -65,6 +65,8 @@ export interface NoteInput {
 const defaultSettings: AppSettings = {
   theme: 'system',
   view: 'grid',
+  sortOrder: 'manual',
+  backgroundTone: 'neutral',
   sidebarCollapsed: false,
   locale: 'tr',
   accent: 'forest',
@@ -73,6 +75,16 @@ const defaultSettings: AppSettings = {
   trashRetentionDays: 30,
   completedItemsBottom: true,
 };
+
+const defaultBranding: BrandingSettings = {
+  appName: 'Suur',
+  hasCustomIcon: false,
+  iconVersion: 'default',
+};
+
+interface StoredBranding extends BrandingSettings {
+  iconStoredName: string | null;
+}
 
 function now() {
   return new Date().toISOString();
@@ -175,6 +187,7 @@ export function listNotes(options: { userId: string; view: NoteView; search?: st
     if (options.view === 'archive') conditions.push('notes.archived = 1');
     else conditions.push('notes.archived = 0');
     if (options.view === 'reminders' || options.view === 'calendar') conditions.push('notes.reminder_at IS NOT NULL');
+    if (options.view === 'shared') conditions.push('notes.assigned_user_id IS NOT NULL');
   }
 
   if (options.search) {
@@ -418,6 +431,42 @@ export function updateSettings(input: Partial<AppSettings>, userId: string) {
     for (const [key, value] of Object.entries(input)) statement.run(userId, key, JSON.stringify(value), timestamp);
   })();
   return getSettings(userId);
+}
+
+export function getStoredBranding(): StoredBranding {
+  const row = getDb().prepare("SELECT value_json FROM settings WHERE key = 'branding'").get() as { value_json: string } | undefined;
+  if (!row) return { ...defaultBranding, iconStoredName: null };
+  try {
+    const value = JSON.parse(row.value_json) as Partial<StoredBranding>;
+    return {
+      appName: typeof value.appName === 'string' && value.appName.trim() ? value.appName.trim().slice(0, 40) : defaultBranding.appName,
+      hasCustomIcon: Boolean(value.hasCustomIcon && value.iconStoredName),
+      iconVersion: typeof value.iconVersion === 'string' ? value.iconVersion : defaultBranding.iconVersion,
+      iconStoredName: typeof value.iconStoredName === 'string' ? value.iconStoredName : null,
+    };
+  } catch {
+    return { ...defaultBranding, iconStoredName: null };
+  }
+}
+
+export function getBranding(): BrandingSettings {
+  const stored = getStoredBranding();
+  return { appName: stored.appName, hasCustomIcon: stored.hasCustomIcon, iconVersion: stored.iconVersion };
+}
+
+export function updateBranding(input: { appName?: string; iconStoredName?: string | null }) {
+  const current = getStoredBranding();
+  const next: StoredBranding = {
+    appName: input.appName === undefined ? current.appName : input.appName.trim().slice(0, 40),
+    iconStoredName: input.iconStoredName === undefined ? current.iconStoredName : input.iconStoredName,
+    hasCustomIcon: input.iconStoredName === undefined ? current.hasCustomIcon : Boolean(input.iconStoredName),
+    iconVersion: input.iconStoredName === undefined ? current.iconVersion : randomUUID(),
+  };
+  getDb().prepare(`
+    INSERT INTO settings (key, value_json, updated_at) VALUES ('branding', ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
+  `).run(JSON.stringify(next), now());
+  return getBranding();
 }
 
 export function addAttachment(input: Omit<AttachmentRow, 'created_at'>) {

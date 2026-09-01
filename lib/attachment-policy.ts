@@ -1,3 +1,5 @@
+import { baseMimeType } from '@/lib/media-utils';
+
 export const attachmentMimeExtensions: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -25,7 +27,13 @@ export const attachmentMimeExtensions: Record<string, string> = {
 const inlineMimeTypes = new Set(Object.keys(attachmentMimeExtensions).filter((mime) => mime.startsWith('image/') || mime.startsWith('audio/')));
 
 export function normalizedAttachmentMime(mime: unknown) {
-  return typeof mime === 'string' && mime in attachmentMimeExtensions ? mime : 'application/octet-stream';
+  const normalized = baseMimeType(mime);
+  return normalized in attachmentMimeExtensions ? normalized : 'application/octet-stream';
+}
+
+export function acceptedAttachmentMime(mime: unknown) {
+  const normalized = baseMimeType(mime);
+  return normalized in attachmentMimeExtensions ? normalized : null;
 }
 
 export function attachmentExtension(mime: unknown) {

@@ -16,6 +16,7 @@ interface KeepNote {
   isPinned?: unknown;
   isArchived?: unknown;
   isTrashed?: unknown;
+  createdTimestampUsec?: unknown;
   userEditedTimestampUsec?: unknown;
   attachments?: Array<{ filePath?: unknown; mimetype?: unknown }>;
 }
@@ -32,6 +33,14 @@ const imageTypes: Record<string, string> = {
 
 function normalizeZipPath(value: string) {
   return value.replaceAll('\\', '/').replace(/^\.\//, '');
+}
+
+function timestampFromMicroseconds(value: unknown) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const milliseconds = Number(value) / 1000;
+  return Number.isFinite(milliseconds) && milliseconds > 0
+    ? { milliseconds, iso: new Date(milliseconds).toISOString() }
+    : null;
 }
 
 export async function importGoogleKeep(file: File, userId: string) {
@@ -85,6 +94,8 @@ export async function importGoogleKeep(file: File, userId: string) {
       }
 
       const checklist = Array.isArray(source.listContent);
+      const edited = timestampFromMicroseconds(source.userEditedTimestampUsec);
+      const created = timestampFromMicroseconds(source.createdTimestampUsec) || edited;
       const note = createNote({
         title: typeof source.title === 'string' ? source.title.slice(0, 500) : '',
         content: typeof source.textContent === 'string' ? source.textContent.slice(0, 100_000) : '',
@@ -95,7 +106,10 @@ export async function importGoogleKeep(file: File, userId: string) {
         color: colorMap[String(source.color || 'DEFAULT').toUpperCase()] || 'default',
         pinned: Boolean(source.isPinned), archived: Boolean(source.isArchived),
         trashedAt: source.isTrashed ? new Date().toISOString() : null,
+        position: edited ? -Math.trunc(edited.milliseconds) : undefined,
         labelIds,
+        createdAt: created?.iso,
+        updatedAt: edited?.iso || created?.iso,
       }, `keep-${fingerprint}`, userId);
       if (!note) { skipped += 1; continue; }
 
@@ -112,13 +126,6 @@ export async function importGoogleKeep(file: File, userId: string) {
         images += 1;
       }
 
-      if (typeof source.userEditedTimestampUsec === 'number' || typeof source.userEditedTimestampUsec === 'string') {
-        const millis = Number(source.userEditedTimestampUsec) / 1000;
-        if (Number.isFinite(millis) && millis > 0) {
-          const timestamp = new Date(millis).toISOString();
-          getDb().prepare('UPDATE notes SET created_at = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(timestamp, timestamp, note.id, userId);
-        }
-      }
       getDb().prepare('INSERT INTO imported_items (user_id, fingerprint, created_at) VALUES (?, ?, ?)').run(userId, fingerprint, new Date().toISOString());
       imported += 1;
     } catch {

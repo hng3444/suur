@@ -2,31 +2,35 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BellRing, Camera, Check, DatabaseBackup, Download, FileArchive, FileJson, FileText, HardDriveDownload, Languages, LogOut, Monitor, Moon, Plus, Shield, Sun, Trash2, Upload, UserRound, Users, X } from 'lucide-react';
+import { AppWindow, BellRing, Camera, Check, DatabaseBackup, Download, FileArchive, FileJson, FileText, HardDriveDownload, Info, Languages, LogOut, Monitor, Moon, Plus, RotateCcw, Shield, SlidersHorizontal, Sun, Trash2, Upload, UserRound, Users, X } from 'lucide-react';
 import { clearOfflineData } from '@/lib/offline';
 import { ConfirmDialog } from '@/components/app-dialogs';
+import { BrandMark } from '@/components/brand-mark';
 import { languages, translate } from '@/lib/i18n';
-import type { AppSettings, User, UserRole } from '@/lib/types';
+import type { AppSettings, BrandingSettings, User, UserRole } from '@/lib/types';
 
-type SettingsTab = 'appearance' | 'profile' | 'users' | 'data';
+type SettingsTab = 'appearance' | 'profile' | 'users' | 'data' | 'advanced' | 'about';
 
 interface SettingsCenterProps {
   currentUser: User;
   settings: AppSettings;
+  branding: BrandingSettings;
   onClose: () => void;
   onSettingsChange: (patch: Partial<AppSettings>) => Promise<void>;
   onUserChange: (user: User) => void;
+  onBrandingChange: (branding: BrandingSettings) => void;
   onImportComplete: () => void;
   onEditLabels: () => void;
 }
 
-export function SettingsCenter({ currentUser, settings, onClose, onSettingsChange, onUserChange, onImportComplete, onEditLabels }: SettingsCenterProps) {
+export function SettingsCenter({ currentUser, settings, branding, onClose, onSettingsChange, onUserChange, onBrandingChange, onImportComplete, onEditLabels }: SettingsCenterProps) {
   const router = useRouter();
   const [tab, setTab] = useState<SettingsTab>(currentUser.mustChangePassword ? 'profile' : 'appearance');
   const [displayName, setDisplayName] = useState(currentUser.displayName);
   const [username, setUsername] = useState(currentUser.username);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [appName, setAppName] = useState(branding.appName);
   const [users, setUsers] = useState<User[]>([]);
   const [newUser, setNewUser] = useState({ username: '', displayName: '', password: '', role: 'user' as UserRole, storageQuotaMb: 512 });
   const [message, setMessage] = useState('');
@@ -37,6 +41,7 @@ export function SettingsCenter({ currentUser, settings, onClose, onSettingsChang
   const avatarInput = useRef<HTMLInputElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const portableInput = useRef<HTMLInputElement>(null);
+  const brandingIconInput = useRef<HTMLInputElement>(null);
   const t = (key: Parameters<typeof translate>[1]) => translate(settings.locale, key);
   const ui = (turkish: string, english: string) => settings.locale === 'tr' ? turkish : english;
 
@@ -183,6 +188,44 @@ export function SettingsCenter({ currentUser, settings, onClose, onSettingsChang
     notify(!settings.notificationsEnabled ? 'Hatırlatıcı bildirimleri açıldı.' : 'Hatırlatıcı bildirimleri kapatıldı.');
   };
 
+  const saveBrandingName = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/branding', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ appName }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ui('Uygulama adı değiştirilemedi.', 'The app name could not be changed.'));
+      onBrandingChange(data.branding);
+      setAppName(data.branding.appName);
+      notify(ui('Uygulama adı güncellendi.', 'App name updated.'));
+    } catch (error) { notify(error instanceof Error ? error.message : ui('Uygulama adı değiştirilemedi.', 'The app name could not be changed.')); }
+    finally { setBusy(false); }
+  };
+
+  const uploadBrandingIcon = async (file: File) => {
+    const form = new FormData(); form.append('file', file);
+    setBusy(true);
+    try {
+      const response = await fetch('/api/branding/icon', { method: 'POST', body: form });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ui('Uygulama simgesi yüklenemedi.', 'The app icon could not be uploaded.'));
+      onBrandingChange(data.branding);
+      notify(ui('Uygulama simgesi güncellendi.', 'App icon updated.'));
+    } catch (error) { notify(error instanceof Error ? error.message : ui('Uygulama simgesi yüklenemedi.', 'The app icon could not be uploaded.')); }
+    finally { setBusy(false); }
+  };
+
+  const resetBrandingIcon = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/branding/icon', { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ui('Simge sıfırlanamadı.', 'The icon could not be reset.'));
+      onBrandingChange(data.branding);
+      notify(ui('Orijinal Suur simgesi geri yüklendi.', 'The original Suur icon was restored.'));
+    } catch (error) { notify(error instanceof Error ? error.message : ui('Simge sıfırlanamadı.', 'The icon could not be reset.')); }
+    finally { setBusy(false); }
+  };
+
   const avatar = (user: User, large = false) => user.avatarUrl
     // eslint-disable-next-line @next/next/no-img-element
     ? <img className={large ? 'settings-avatar large' : 'settings-avatar'} src={user.avatarUrl} alt="" />
@@ -191,14 +234,16 @@ export function SettingsCenter({ currentUser, settings, onClose, onSettingsChang
   return (
     <div className="dialog-backdrop settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !currentUser.mustChangePassword) onClose(); }}>
       <section className="settings-center" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <header className="settings-header"><div><span className="editor-kicker">SUUR</span><h2 id="settings-title">{ui('Ayarlar', 'Settings')}</h2></div>{!currentUser.mustChangePassword && <button className="toolbar-button" onClick={onClose} aria-label={ui('Ayarları kapat', 'Close settings')}><X size={20} /></button>}</header>
+        <header className="settings-header"><div><span className="editor-kicker">{branding.appName.toLocaleUpperCase(settings.locale)}</span><h2 id="settings-title">{ui('Ayarlar', 'Settings')}</h2></div>{!currentUser.mustChangePassword && <button className="toolbar-button" onClick={onClose} aria-label={ui('Ayarları kapat', 'Close settings')}><X size={20} /></button>}</header>
         <div className="settings-layout">
           <nav className="settings-nav" aria-label={ui('Ayar kategorileri', 'Settings categories')}>
             {!currentUser.mustChangePassword && <button className={tab === 'appearance' ? 'active' : ''} onClick={() => setTab('appearance')}><Monitor size={18} /><span>{ui('Görünüm', 'Appearance')}</span></button>}
             <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserRound size={18} /><span>{ui('Profil', 'Profile')}</span></button>
             {!currentUser.mustChangePassword && currentUser.role === 'superadmin' && <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}><Users size={18} /><span>{ui('Kullanıcılar', 'Users')}</span></button>}
             {!currentUser.mustChangePassword && <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')}><DatabaseBackup size={18} /><span>{ui('Veri ve yedek', 'Data & backup')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'advanced' ? 'active' : ''} onClick={() => setTab('advanced')}><SlidersHorizontal size={18} /><span>{t('settings.advanced')}</span></button>}
             {!currentUser.mustChangePassword && <button onClick={() => { onClose(); onEditLabels(); }}><Shield size={18} /><span>{ui('Etiketler', 'Labels')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}><Info size={18} /><span>{t('settings.about')}</span></button>}
             <button className="logout-nav" onClick={() => void signOut()}><LogOut size={18} /><span>{ui('Çıkış yap', 'Sign out')}</span></button>
           </nav>
 
@@ -208,10 +253,10 @@ export function SettingsCenter({ currentUser, settings, onClose, onSettingsChang
                 {([{ value: 'light', label: ui('Açık', 'Light'), icon: Sun }, { value: 'dark', label: ui('Karanlık', 'Dark'), icon: Moon }, { value: 'system', label: ui('Sistem', 'System'), icon: Monitor }] as const).map((item) => <button className={settings.theme === item.value ? 'selected' : ''} key={item.value} onClick={() => void onSettingsChange({ theme: item.value })}><item.icon size={21} /><span>{item.label}</span>{settings.theme === item.value && <Check size={15} />}</button>)}
               </div>
               <div className="setting-row"><div><strong>{ui('Not düzeni', 'Note layout')}</strong><span>{ui('Grid veya tek sütun liste', 'Grid or single-column list')}</span></div><select value={settings.view} onChange={(event) => void onSettingsChange({ view: event.target.value as 'grid' | 'list' })}><option value="grid">Grid</option><option value="list">{ui('Liste', 'List')}</option></select></div>
+              <div className="setting-row"><div><strong>{ui('Not sıralaması', 'Note order')}</strong><span>{settings.sortOrder === 'manual' ? ui('Sürükleyerek kendi sıranı oluştur', 'Drag notes into your preferred order') : ui('Seçilen kurala göre otomatik sırala', 'Automatically order notes by the selected rule')}</span></div><select value={settings.sortOrder} onChange={(event) => void onSettingsChange({ sortOrder: event.target.value as AppSettings['sortOrder'] })}><option value="manual">{ui('Özel sıralama', 'Custom order')}</option><option value="updated-desc">{ui('Son düzenlenenler', 'Recently updated')}</option><option value="updated-asc">{ui('En eski düzenlenenler', 'Least recently updated')}</option><option value="created-desc">{ui('En yeni oluşturulanlar', 'Newest created')}</option><option value="created-asc">{ui('En eski oluşturulanlar', 'Oldest created')}</option><option value="title-asc">{ui('Başlığa göre A–Z', 'Title A–Z')}</option></select></div>
               <div className="setting-row"><div><strong><Languages size={16} /> {t('settings.language')}</strong><span>{t('settings.languageHelp')}</span></div><select value={settings.locale} onChange={(event) => void onSettingsChange({ locale: event.target.value as AppSettings['locale'] })}>{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select></div>
               <div className="setting-row accent-setting"><div><strong>{ui('Vurgu rengi', 'Accent color')}</strong><span>{ui('Düğmeler ve seçili alanlar', 'Buttons and selected areas')}</span></div><div className="accent-options">{(['forest', 'emerald', 'teal', 'blue', 'violet', 'amber'] as const).map((accent) => <button key={accent} className={`accent-${accent} ${settings.accent === accent ? 'selected' : ''}`} onClick={() => void onSettingsChange({ accent })} aria-label={accent}>{settings.accent === accent && <Check size={13} />}</button>)}</div></div>
-              <div className="setting-row"><div><strong><BellRing size={16} /> {ui('Tarayıcı bildirimleri', 'Browser notifications')}</strong><span>{ui('Hatırlatıcı zamanı geldiğinde haber ver', 'Notify when a reminder is due')}</span></div><button className={`toggle-switch ${settings.notificationsEnabled ? 'selected' : ''}`} role="switch" aria-checked={settings.notificationsEnabled} onClick={() => void toggleNotifications()}><span /></button></div>
-              <div className="setting-row"><div><strong>{ui('Tamamlanan checklist öğeleri', 'Completed checklist items')}</strong><span>{ui('Tamamlanınca otomatik olarak alta taşı', 'Move completed items to the bottom')}</span></div><button className={`toggle-switch ${settings.completedItemsBottom ? 'selected' : ''}`} role="switch" aria-checked={settings.completedItemsBottom} onClick={() => void onSettingsChange({ completedItemsBottom: !settings.completedItemsBottom })}><span /></button></div>
+              <div className="setting-row background-setting"><div><strong>{ui('Arka plan tonu', 'Background tone')}</strong><span>{ui('Çalışma alanının temel rengini seç', 'Choose the base color of the workspace')}</span></div><div className="background-options">{([{ value: 'neutral', label: ui('Nötr', 'Neutral') }, { value: 'sage', label: ui('Adaçayı', 'Sage') }, { value: 'warm', label: ui('Sıcak', 'Warm') }, { value: 'blue', label: ui('Mavi', 'Blue') }, { value: 'rose', label: ui('Gül', 'Rose') }] as const).map((tone) => <button key={tone.value} className={`background-${tone.value} ${settings.backgroundTone === tone.value ? 'selected' : ''}`} onClick={() => void onSettingsChange({ backgroundTone: tone.value })} aria-label={tone.label} title={tone.label}>{settings.backgroundTone === tone.value && <Check size={13} />}</button>)}</div></div>
             </section>}
 
             {tab === 'profile' && <section className="settings-panel"><h3>{ui('Profil', 'Profile')}</h3><p>{ui('Hesap ve profil bilgilerini yönet.', 'Manage account and profile information.')}</p>
@@ -229,8 +274,6 @@ export function SettingsCenter({ currentUser, settings, onClose, onSettingsChang
               <h4 className="settings-section-title">{ui('Dışa aktar ve indir', 'Export & download')}</h4>
               <div className="data-action-grid"><a href="/api/export?format=backup"><FileArchive size={19} /><span><strong>{ui('Tam yedek', 'Full backup')}</strong><small>{ui('Notlar, ayarlar ve dosyalar', 'Notes, settings, and files')}</small></span></a><a href="/api/export?format=json"><FileJson size={19} /><span><strong>JSON</strong><small>{ui('Taşınabilir yapılandırılmış veri', 'Portable structured data')}</small></span></a><a href="/api/export?format=markdown"><FileText size={19} /><span><strong>Markdown</strong><small>{ui('Her not ayrı bir .md dosyası', 'Each note as a separate .md file')}</small></span></a><a href="/api/export?format=txt"><FileText size={19} /><span><strong>TXT</strong><small>{ui('Düz metin arşivi', 'Plain-text archive')}</small></span></a></div>
               <h4 className="settings-section-title">{ui('Sunucu yedekleri', 'Server backups')}</h4>
-              <div className="setting-row"><div><strong>{ui('Otomatik yedekleme', 'Automatic backup')}</strong><span>{ui('Uygulama kapalı olsa da sunucuda günlük veya haftalık çalışır', 'Runs daily or weekly on the server, even while the app is closed')}</span></div><select value={settings.backupFrequency} onChange={(event) => void onSettingsChange({ backupFrequency: event.target.value as AppSettings['backupFrequency'] })}><option value="off">{ui('Kapalı', 'Off')}</option><option value="daily">{ui('Her gün', 'Daily')}</option><option value="weekly">{ui('Her hafta', 'Weekly')}</option></select></div>
-              <div className="setting-row"><div><strong>{ui('Çöpü otomatik temizle', 'Automatically empty trash')}</strong><span>{ui('Silinen notların saklanacağı gün', 'Days to retain deleted notes')}</span></div><select value={settings.trashRetentionDays} onChange={(event) => void onSettingsChange({ trashRetentionDays: Number(event.target.value) })}>{[7, 14, 30, 60, 90, 180, 365].map((days) => <option key={days} value={days}>{days} {ui('gün', 'days')}</option>)}</select></div>
               <button className="wide-data-button" onClick={() => void createServerBackup()} disabled={busy}><HardDriveDownload size={18} /> {ui('Şimdi sunucu yedeği oluştur', 'Create server backup now')}</button>
               {backups.length > 0 && <div className="backup-list">{backups.map((backup) => <a key={backup.name} href={`/api/backups/${encodeURIComponent(backup.name)}`}><span>{new Date(backup.createdAt).toLocaleString(settings.locale)}</span><small>{(backup.size / 1024 / 1024).toFixed(1)} MB</small><Download size={15} /></a>)}</div>}
               <h4 className="settings-section-title">{ui('İçe aktar', 'Import')}</h4>
@@ -239,6 +282,31 @@ export function SettingsCenter({ currentUser, settings, onClose, onSettingsChang
               <input ref={portableInput} hidden type="file" accept=".zip,.json,.md,.markdown,application/zip,application/json,text/markdown" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importPortable(file); event.target.value = ''; }} />
               <input ref={importInput} hidden type="file" accept=".zip,.json,application/zip,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importKeep(file); event.target.value = ''; }} />
               {importResult && <p className="import-result" role="status">{importResult}</p>}
+            </section>}
+
+            {tab === 'advanced' && <section className="settings-panel"><h3>{t('settings.advanced')}</h3><p>{ui('Bildirim, otomasyon ve sunucuya özel seçenekleri tek yerde yönet.', 'Manage notifications, automation, and server-specific options in one place.')}</p>
+              <h4 className="settings-section-title">{ui('Not davranışı', 'Note behavior')}</h4>
+              <div className="setting-row"><div><strong><BellRing size={16} /> {ui('Tarayıcı bildirimleri', 'Browser notifications')}</strong><span>{ui('Hatırlatıcı zamanı geldiğinde haber ver', 'Notify when a reminder is due')}</span></div><button className={`toggle-switch ${settings.notificationsEnabled ? 'selected' : ''}`} role="switch" aria-checked={settings.notificationsEnabled} onClick={() => void toggleNotifications()}><span /></button></div>
+              <div className="setting-row"><div><strong>{ui('Tamamlanan checklist öğeleri', 'Completed checklist items')}</strong><span>{ui('Tamamlanınca otomatik olarak alta taşı', 'Move completed items to the bottom')}</span></div><button className={`toggle-switch ${settings.completedItemsBottom ? 'selected' : ''}`} role="switch" aria-checked={settings.completedItemsBottom} onClick={() => void onSettingsChange({ completedItemsBottom: !settings.completedItemsBottom })}><span /></button></div>
+              <h4 className="settings-section-title">{ui('Sunucu bakımı', 'Server maintenance')}</h4>
+              <div className="setting-row"><div><strong>{ui('Otomatik yedekleme', 'Automatic backup')}</strong><span>{ui('Uygulama kapalı olsa da sunucuda günlük veya haftalık çalışır', 'Runs daily or weekly on the server, even while the app is closed')}</span></div><select value={settings.backupFrequency} onChange={(event) => void onSettingsChange({ backupFrequency: event.target.value as AppSettings['backupFrequency'] })}><option value="off">{ui('Kapalı', 'Off')}</option><option value="daily">{ui('Her gün', 'Daily')}</option><option value="weekly">{ui('Her hafta', 'Weekly')}</option></select></div>
+              <div className="setting-row"><div><strong>{ui('Çöpü otomatik temizle', 'Automatically empty trash')}</strong><span>{ui('Silinen notların saklanacağı gün', 'Days to retain deleted notes')}</span></div><select value={settings.trashRetentionDays} onChange={(event) => void onSettingsChange({ trashRetentionDays: Number(event.target.value) })}>{[7, 14, 30, 60, 90, 180, 365].map((days) => <option key={days} value={days}>{days} {ui('gün', 'days')}</option>)}</select></div>
+              {currentUser.role === 'superadmin' && <>
+                <h4 className="settings-section-title">{ui('Uygulama markası', 'Application branding')}</h4>
+                <div className="branding-card"><div className="branding-preview"><BrandMark branding={branding} /><div><strong>{branding.appName}</strong><span>{ui('Giriş ekranı, başlık ve kurulan PWA', 'Sign-in screen, header, and installed PWA')}</span></div></div>
+                  <label>{ui('Uygulama adı', 'Application name')}<span className="branding-name-field"><input value={appName} maxLength={40} onChange={(event) => setAppName(event.target.value)} /><button onClick={() => void saveBrandingName()} disabled={busy || !appName.trim() || appName.trim() === branding.appName}>{ui('Kaydet', 'Save')}</button></span></label>
+                  <div className="branding-actions"><button onClick={() => brandingIconInput.current?.click()} disabled={busy}><AppWindow size={17} /> {ui('.ico simgesi yükle', 'Upload .ico icon')}</button>{branding.hasCustomIcon && <button onClick={() => void resetBrandingIcon()} disabled={busy}><RotateCcw size={17} /> {ui('Orijinal simge', 'Original icon')}</button>}</div>
+                  <input ref={brandingIconInput} hidden type="file" accept=".ico,image/x-icon,image/vnd.microsoft.icon" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadBrandingIcon(file); event.target.value = ''; }} />
+                  <small>{ui('En fazla 2 MB, geçerli ICO dosyası. Yeni simge tarayıcı önbelleği nedeniyle kısa bir gecikmeyle görünebilir.', 'Maximum 2 MB, valid ICO file. Browser caching may delay the new icon briefly.')}</small>
+                </div>
+              </>}
+            </section>}
+
+            {tab === 'about' && <section className="settings-panel about-panel"><h3>{t('settings.about')}</h3><p>{ui('Uygulamanın değiştirilemeyen özgün kimliği ve iletişim bilgileri.', 'The application’s immutable original identity and contact details.')}</p>
+              <div className="about-brand"><BrandMark branding={branding} original /><div><span>{t('about.original')}</span><strong>Suur</strong><small>Private, self-hosted notes</small></div></div>
+              <p className="about-attribution">{t('about.attribution')}</p>
+              <dl className="about-details"><div><dt>{ui('Sürüm', 'Version')}</dt><dd>0.2.0</dd></div><div><dt>{t('about.contact')}</dt><dd><a href="mailto:hng3444@gmail.com">hng3444@gmail.com</a></dd></div><div><dt>{ui('Lisans', 'License')}</dt><dd>Open source</dd></div></dl>
+              <p className="about-note">{ui('Superadmin uygulamanın görünen adını ve simgesini değiştirebilir; bu bölümdeki orijinal Suur bilgisi değişmez.', 'A superadmin may change the displayed app name and icon; the original Suur identity in this section never changes.')}</p>
             </section>}
           </div>
         </div>

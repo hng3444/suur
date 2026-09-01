@@ -7,7 +7,7 @@ import { uploadsDirectory } from '@/lib/db';
 import { findUserById } from '@/lib/auth';
 import { addAttachment, getNote, storageUsage } from '@/lib/repository';
 import { idParamSchema } from '@/lib/validation';
-import { attachmentMimeExtensions } from '@/lib/attachment-policy';
+import { acceptedAttachmentMime, attachmentMimeExtensions } from '@/lib/attachment-policy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,8 +26,9 @@ export async function POST(request: Request, context: Context) {
     const form = await request.formData();
     const file = form.get('file');
     if (!(file instanceof File)) return jsonError('Bir dosya seçin.', 400);
-    const extension = attachmentMimeExtensions[file.type];
-    if (!extension) return jsonError('Bu dosya türü desteklenmiyor.', 415);
+    const mimeType = acceptedAttachmentMime(file.type);
+    if (!mimeType) return jsonError('Bu dosya türü desteklenmiyor.', 415);
+    const extension = attachmentMimeExtensions[mimeType];
     const maxBytes = Number(process.env.MAX_UPLOAD_MB || 25) * 1024 * 1024;
     if (file.size < 1 || file.size > maxBytes) return jsonError(`Dosya en fazla ${process.env.MAX_UPLOAD_MB || 25} MB olabilir.`, 413);
     const owner = findUserById(note.ownerId);
@@ -44,7 +45,7 @@ export async function POST(request: Request, context: Context) {
       note_id: noteId,
       filename,
       stored_name: storedName,
-      mime_type: file.type,
+      mime_type: mimeType,
       size: file.size,
     });
     return NextResponse.json({ attachment }, { status: 201 });

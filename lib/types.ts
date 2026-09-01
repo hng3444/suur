@@ -51,6 +51,8 @@ export interface Note {
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   view: 'grid' | 'list';
+  sortOrder: NoteSortOrder;
+  backgroundTone: BackgroundTone;
   sidebarCollapsed: boolean;
   locale: Locale;
   accent: 'forest' | 'emerald' | 'teal' | 'blue' | 'violet' | 'amber';
@@ -59,6 +61,16 @@ export interface AppSettings {
   trashRetentionDays: number;
   completedItemsBottom: boolean;
 }
+
+export interface BrandingSettings {
+  appName: string;
+  hasCustomIcon: boolean;
+  iconVersion: string;
+}
+
+export type NoteSortOrder = 'manual' | 'updated-desc' | 'updated-asc' | 'created-desc' | 'created-asc' | 'title-asc';
+
+export type BackgroundTone = 'neutral' | 'sage' | 'warm' | 'blue' | 'rose';
 
 export type Locale = 'en' | 'zh' | 'hi' | 'es' | 'ar' | 'fr' | 'bn' | 'pt' | 'ru' | 'tr';
 
@@ -78,4 +90,4 @@ export interface User {
 
 export type UserSummary = Pick<User, 'id' | 'username' | 'displayName' | 'avatarUrl'>;
 
-export type NoteView = 'notes' | 'reminders' | 'calendar' | 'archive' | 'trash';
+export type NoteView = 'notes' | 'reminders' | 'calendar' | 'shared' | 'archive' | 'trash';

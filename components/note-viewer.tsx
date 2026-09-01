@@ -49,7 +49,7 @@ export function NoteViewer({ note, locale, view, onClose, onEdit, onRestore, onP
   };
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <article className={`note-viewer note-${note.color}`} role="dialog" aria-modal="true" aria-labelledby="note-viewer-title">
+      <article className={`note-viewer note-${note.color}`} role="dialog" aria-modal="true" aria-labelledby={note.title ? 'note-viewer-title' : undefined} aria-label={note.title || t('untitled')}>
         <header className="viewer-header">
           <span className="editor-kicker">{view === 'trash' ? t('trashMode') : t('readMode')}</span>
           <div>
@@ -63,7 +63,7 @@ export function NoteViewer({ note, locale, view, onClose, onEdit, onRestore, onP
         ))}</div>}
         {files.length > 0 && <div className="viewer-files">{files.map((attachment) => attachment.mimeType.startsWith('audio/') ? <div className="viewer-audio" key={attachment.id}><audio controls preload="metadata" src={attachment.url} /><span>{attachment.filename}</span></div> : <a key={attachment.id} href={attachment.url} download={attachment.filename}><FileText size={18} /><span>{attachment.filename}<small>{(attachment.size / 1024).toFixed(0)} KB</small></span><Download size={16} /></a>)}</div>}
         <div className="viewer-content">
-          <h1 id="note-viewer-title">{note.title || t('untitled')}</h1>
+          {note.title && <h1 id="note-viewer-title">{note.title}</h1>}
           {note.type === 'checklist' ? <ul className="viewer-checklist">{note.items.map((item) => <li className={item.checked ? 'checked' : ''} key={item.id}><span>{item.checked ? '✓' : ''}</span><p>{item.text || t('blankItem')}</p></li>)}</ul> : note.contentFormat === 'markdown' ? <MarkdownView value={note.content} /> : <p className="viewer-text">{note.content || t('emptyText')}</p>}
           {(note.reminderAt || note.labels.length > 0) && <div className="viewer-chips">
             {note.reminderAt && <span><Bell size={13} />{formatReminder(note.reminderAt, locale)}</span>}

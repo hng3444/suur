@@ -63,6 +63,8 @@ export const labelUpdateSchema = labelCreateSchema.partial().refine(
 export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']).optional(),
   view: z.enum(['grid', 'list']).optional(),
+  sortOrder: z.enum(['manual', 'updated-desc', 'updated-asc', 'created-desc', 'created-asc', 'title-asc']).optional(),
+  backgroundTone: z.enum(['neutral', 'sage', 'warm', 'blue', 'rose']).optional(),
   sidebarCollapsed: z.boolean().optional(),
   locale: z.enum(['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt', 'ru', 'tr']).optional(),
   accent: z.enum(['forest', 'emerald', 'teal', 'blue', 'violet', 'amber']).optional(),
