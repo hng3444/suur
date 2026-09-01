@@ -1,63 +1,160 @@
 # Suur — private, self-hosted notes that work offline
 
-Suur is a fast, multilingual, self-hosted note-taking app for people who like the simplicity of Google Keep but want full control of their data. It runs as one Docker container, stores everything in SQLite and `/data`, installs as a PWA, and keeps text edits available when the network drops.
+Suur is a fast, multilingual, self-hosted note-taking app for people who like the simplicity of Google Keep but want full control of their data.
+
+It runs as a single Docker container, stores persistent data in SQLite under `/data`, installs as a PWA, and keeps text and checklist edits available when the network drops.
+
+**Current release:** `v0.1.1`
 
 **Keywords:** self-hosted notes, offline-first notes app, private Google Keep alternative, Docker note-taking app, CasaOS notes, SQLite PWA.
 
+---
+
 ## Screenshots
 
-### Home
-![Suur Home](screenshots/suur%20home.png)
+<table>
+<tr>
+<td width="50%" align="center">
+<strong>Home</strong><br><br>
+<img src="screenshots/suur%20home.png" alt="Suur Home">
+</td>
+<td width="50%" align="center">
+<strong>Notes</strong><br><br>
+<img src="screenshots/suur%20home%202.png" alt="Suur Notes">
+</td>
+</tr>
 
-### Notes
-![Suur Home](screenshots/suur%20home%202.png)
+<tr>
+<td width="50%" align="center">
+<strong>Edit Mode</strong><br><br>
+<img src="screenshots/suur%20edit%20mode.png" alt="Suur Edit Mode">
+</td>
+<td width="50%" align="center">
+<strong>Read Mode</strong><br><br>
+<img src="screenshots/suur%20read%20mode.png" alt="Suur Read Mode">
+</td>
+</tr>
 
-### Edit Mode
-![Suur Edit Mode](screenshots/suur%20edit%20mode.png)
+<tr>
+<td width="50%" align="center">
+<strong>To-do List</strong><br><br>
+<img src="screenshots/suur%20to%20do%20list%20edit%20mode.png" alt="Suur To-do List">
+</td>
+<td width="50%" align="center">
+<strong>Settings</strong><br><br>
+<img src="screenshots/suur%20settings.png" alt="Suur Settings">
+</td>
+</tr>
+</table>
 
-### Read Mode
-![Suur Read Mode](screenshots/suur%20read%20mode.png)
-
-### To-do List
-![Suur To-do List](screenshots/suur%20to%20do%20list%20edit%20mode.png)
-
-### Settings
-![Suur Settings](screenshots/suur%20settings.png)
+---
 
 ## Why Suur?
 
 - Familiar card-based workflow without copying Google branding or assets
-- Notes, labels, accounts, settings, backups, and uploads stay on your server
-- Real offline app shell plus an IndexedDB edit queue that syncs after reconnection
-- One-command Docker installation with a persistent `/data` volume
-- Responsive desktop and mobile UI, dark mode, and installable PWA
-- English, Chinese, Hindi, Spanish, Arabic, French, Bengali, Portuguese, Russian, and Turkish
+- Your notes, labels, accounts, settings, backups, and uploads stay on your server
+- Real offline app shell with an IndexedDB edit queue that syncs after reconnection
+- Single-container Docker deployment with persistent `/data` storage
+- Responsive desktop and mobile interface
+- Dark mode
+- Installable PWA
+- Multi-user support
+- Available in English, Chinese, Hindi, Spanish, Arabic, French, Bengali, Portuguese, Russian, and Turkish
 
-## Feature overview
+---
 
-- Text notes, checklists, Markdown editing, and safe Markdown preview
-- Pinning, custom pin order, archive, trash, and configurable automatic trash cleanup
-- Labels, colors, reminders, browser notifications, search, and advanced filters
-- Grid/list layouts, drag-to-sort, keyboard shortcuts, and note templates
-- Multi-select actions for labels, archive, trash, restore, and permanent deletion
-- Images, audio recordings, PDFs, and office-document attachments with drag and drop
-- Read mode with an explicit edit action, note duplication, version history, and restore
-- Read-only public note links, user assignment, and a reminder calendar
-- Automatic daily/weekly server backups plus manual backup download and restore
-- JSON, Markdown, and TXT export; Suur, JSON, Markdown, and Google Keep import
-- Multi-user accounts, profile photos, roles, per-user storage quotas, and secure sessions
-- Theme, accent color, layout, language, and checklist behavior settings
+## Features
+
+### Notes and organization
+
+- Text notes
+- Checklists
+- Markdown editing
+- Safe Markdown preview
+- Pinning and custom pin order
+- Archive
+- Trash
+- Configurable automatic trash cleanup
+- Labels
+- Note colors
+- Reminders
+- Browser notifications
+- Search
+- Advanced filters
+- Grid and list layouts
+- Drag-to-sort
+- Keyboard shortcuts
+- Note templates
+
+### Productivity
+
+- Multi-select actions
+- Bulk labels
+- Bulk archive and trash
+- Restore and permanent deletion
+- Read mode with explicit edit action
+- Note duplication
+- Version history and restore
+- Reminder calendar
+
+### Attachments
+
+- Images
+- Audio recordings
+- PDFs
+- Office documents
+- Drag-and-drop uploads
+
+### Sharing and collaboration
+
+- Read-only public note links
+- User assignment
+- Multi-user accounts
+- User roles
+- Per-user storage quotas
+- Profile photos
+
+### Import and export
+
+- Suur backup import/export
+- JSON export
+- Markdown export
+- TXT export
+- Markdown import
+- Google Keep import
+- Portable backup archives
+
+### Customization
+
+- Light and dark themes
+- Accent colors
+- Grid/list layout
+- Multiple languages
+- Checklist behavior settings
+
+---
 
 ## Quick start with Docker Compose
 
-Requirements: Docker Engine and Docker Compose v2.
+### Requirements
+
+- Docker Engine
+- Docker Compose v2
+
+Clone the repository and start Suur:
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
 ```
 
-Open `http://SERVER_IP:3721`.
+Open:
+
+```text
+http://SERVER_IP:3721
+```
+
+### Initial account
 
 The initial account is created only when the database is empty:
 
@@ -67,44 +164,62 @@ Password: 7Admin7
 Role: superadmin
 ```
 
-Suur blocks access to the rest of the application until this built-in password is changed in **Settings → Profile**. You can override the initial credentials in `.env` before the first start.
+Suur blocks access to the rest of the application until the built-in password is changed in:
 
-Change the host port without editing Compose:
+**Settings → Profile**
+
+You can override the initial credentials in `.env` before the first start.
+
+### Custom port and public URL
 
 ```dotenv
 SUUR_PORT=8088
 SUUR_PUBLIC_URL=https://notes.example.com
-# Set this only when every request reaches Suur through your trusted proxy.
+
+# Enable only when every request reaches Suur through a trusted proxy.
 SUUR_TRUST_PROXY=true
 ```
 
-Check the deployment:
+### Check the deployment
 
 ```bash
 docker compose ps
 docker compose logs -f suur
 ```
 
-## Use the prebuilt container image
+---
 
-Images for `linux/amd64` and `linux/arm64` are published from `main`:
+## Docker image
+
+Prebuilt Docker images for `linux/amd64` and `linux/arm64` are published to GitHub Container Registry.
+
+Latest:
 
 ```text
 ghcr.io/hng3444/suur:latest
 ```
 
-Minimal Compose example:
+Current release:
+
+```text
+ghcr.io/hng3444/suur:v0.1.1
+```
+
+### Minimal Compose example
 
 ```yaml
 services:
   suur:
     image: ghcr.io/hng3444/suur:latest
     restart: unless-stopped
+
     ports:
       - "3721:3000"
+
     environment:
       DATA_DIR: /data
       SUUR_PUBLIC_URL: http://localhost:3721
+
     volumes:
       - suur-data:/data
 
@@ -112,22 +227,73 @@ volumes:
   suur-data:
 ```
 
-## CasaOS
+---
 
-For the manual installer use:
+## Updating Suur
 
-- Image: `ghcr.io/hng3444/suur:latest`
-- Container port: `3000`
-- Host port: `3721` or any available port
-- Host path: `/DATA/AppData/suur/data`
-- Container path: `/data`
-- Restart policy: `unless-stopped`
+When using the `latest` image:
 
-The ready-to-submit CasaOS v2 source manifest is available at [`casaos/docker-compose.yml`](casaos/docker-compose.yml). It follows the current official `x-casaos` source format.
+```bash
+docker compose pull
+docker compose up -d
+```
 
-## Data, updates, and backups
+This pulls the newest published Docker image and recreates the container while preserving `/data`.
 
-All persistent application data lives below `/data`:
+You can verify the running containers with:
+
+```bash
+docker compose ps
+```
+
+### CasaOS
+
+When Suur is installed in CasaOS using:
+
+```text
+ghcr.io/hng3444/suur:latest
+```
+
+you can normally update it from the CasaOS interface using:
+
+**Suur → Update and Restart**
+
+after a new Docker image has been published.
+
+Persistent data remains separate from the application container.
+
+---
+
+## CasaOS installation
+
+For a manual CasaOS installation use:
+
+```text
+Image:          ghcr.io/hng3444/suur:latest
+Container port: 3000
+Host port:      3721
+Host path:      /DATA/AppData/suur/data
+Container path: /data
+Restart policy: unless-stopped
+```
+
+The CasaOS v2 source manifest is available at:
+
+[`casaos/docker-compose.yml`](casaos/docker-compose.yml)
+
+It follows the `x-casaos` source format.
+
+---
+
+## Persistent data
+
+All persistent Suur application data lives under:
+
+```text
+/data
+```
+
+Typical contents:
 
 ```text
 /data/suur.db
@@ -137,51 +303,169 @@ All persistent application data lives below `/data`:
 /data/backups/
 ```
 
-Rebuilding or replacing the container does not remove the volume. Update with:
+The Docker container itself is disposable.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+Rebuilding, updating, or replacing the container does not remove your notes as long as `/data` remains mounted to persistent storage.
 
-You can also download a complete portable ZIP from **Settings → Data & backup**. It contains the user's notes, labels, settings, and attachments. A server-side scheduler creates enabled daily or weekly backups even when no browser is open and retains the latest 14 archives per user.
+---
 
-## Offline behavior and future Android APK
+## Backups
 
-After a successful sign-in, the service worker stores a private application shell and static assets. Notes and labels are cached per user in IndexedDB. Text/checklist changes made offline are queued with mutation IDs, replayed after reconnection, and protected by note-version conflict detection.
+A complete portable backup can be downloaded from:
 
-An internet connection is still required to sign in for the first time, upload a new attachment, create a public link, or synchronize with the server. The same responsive, offline-capable web layer is suitable for a future Android Trusted Web Activity or native wrapper; see [`docs/ANDROID.md`](docs/ANDROID.md).
+**Settings → Data & backup**
 
-## Security model
+Backups can contain:
+
+- Notes
+- Checklists
+- Labels
+- Settings
+- Attachments
+- Application metadata
+
+Suur can also create automatic server-side backups on a daily or weekly schedule.
+
+The backup scheduler runs on the server even when no browser is open.
+
+The latest 14 backup archives per user are retained.
+
+---
+
+## Offline behavior
+
+After a successful sign-in, Suur's service worker stores the private application shell and static assets locally.
+
+Notes and labels are cached per user in IndexedDB.
+
+Text and checklist changes made while offline are:
+
+1. Stored locally
+2. Added to an offline mutation queue
+3. Replayed after reconnection
+4. Checked against note versions to reduce synchronization conflicts
+
+An internet connection is still required for:
+
+- First sign-in
+- Uploading new attachments
+- Creating public links
+- Synchronizing changes with the server
+
+---
+
+## PWA and future Android app
+
+Suur can be installed as a Progressive Web App on supported desktop and mobile browsers.
+
+The responsive offline-capable web layer can also serve as the foundation for a future Android Trusted Web Activity or native wrapper.
+
+See:
+
+[`docs/ANDROID.md`](docs/ANDROID.md)
+
+---
+
+## Security
+
+Suur includes several security measures:
 
 - Passwords are hashed with scrypt and a unique random salt
-- Session tokens are stored as SHA-256 hashes; cookies are HttpOnly and SameSite=Strict
+- Session tokens are stored as SHA-256 hashes
+- Authentication cookies are HttpOnly
+- Cookies use `SameSite=Strict`
 - HTTPS cookies are enabled when `SUUR_PUBLIC_URL` starts with `https://`
-- Every note, label, setting, upload, backup, and offline cache is scoped to a user
-- API input is validated with Zod and uploads use allowlisted MIME types and size/quota checks
-- A forced default-password change is enforced by the API, not only by the interface
-- Attachment responses are sandboxed; non-media files download instead of running in the Suur origin
-- The production container runs as an unprivileged user with `no-new-privileges`
-- CSP, frame blocking, MIME sniffing protection, and a restrictive permissions policy are enabled
+- Notes, labels, settings, uploads, backups, and offline caches are scoped per user
+- API input is validated with Zod
+- Uploads use allowlisted MIME types
+- Upload size and quota checks are enforced
+- Default-password changes are enforced by the API
+- Attachment responses are sandboxed
+- Non-media files are downloaded instead of executed in the Suur origin
+- Production containers run as an unprivileged user
+- `no-new-privileges` is enabled
+- Content Security Policy is enabled
+- Frame blocking is enabled
+- MIME sniffing protection is enabled
+- Restrictive browser permissions policies are used
 
-For an internet-facing deployment, use HTTPS through Cloudflare Tunnel or another trusted reverse proxy, protect the CasaOS administration panel separately, and never keep the default password.
+For an internet-facing deployment:
+
+- Use HTTPS
+- Use Cloudflare Tunnel or another trusted reverse proxy
+- Protect your CasaOS administration interface separately
+- Never keep the default password
+
+---
 
 ## Development
 
+Install dependencies:
+
 ```bash
 npm ci
+```
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-Quality checks:
+### Quality checks
 
 ```bash
 npm run lint
 npm run build
 ```
 
-Architecture details are in [`ARCHITECTURE.md`](ARCHITECTURE.md). Security reporting guidance is in [`SECURITY.md`](SECURITY.md).
+Architecture documentation:
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md)
+
+Security reporting:
+
+[`SECURITY.md`](SECURITY.md)
+
+---
+
+## Releases
+
+Suur uses semantic versioning during development.
+
+Examples:
+
+```text
+v0.1.1  Bug fixes and small improvements
+v0.1.2  Patch release
+v0.2.0  New features or larger changes
+v1.0.0  First stable release
+```
+
+Docker builds from the main development branch are published as:
+
+```text
+ghcr.io/hng3444/suur:latest
+```
+
+Stable releases can additionally be published with versioned tags such as:
+
+```text
+ghcr.io/hng3444/suur:v0.1.1
+```
+
+---
 
 ## Project status
 
-Suur is under active development. Test backups and upgrades on non-critical data before relying on a new release. Contributions and focused bug reports are welcome.
+Suur is under active development.
+
+The current release is:
+
+```text
+v0.1.1
+```
+
+Test backups and upgrades on non-critical data before relying on a new release.
+
+Contributions and focused bug reports are welcome.
