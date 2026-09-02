@@ -14,7 +14,7 @@ export async function POST(_: Request, context: Context) {
     const token = createNoteShare(idParamSchema.parse((await context.params).id), user.id);
     if (!token) return jsonError('Note not found.', 404);
     const publicUrl = process.env.SUUR_PUBLIC_URL || 'http://localhost:3000';
-    return NextResponse.json({ url: new URL(`/share/${token}`, publicUrl).toString() });
+    return NextResponse.json({ url: new URL(`/s/${token}`, publicUrl).toString() });
   } catch (error) {
     return handleApiError(error);
   }

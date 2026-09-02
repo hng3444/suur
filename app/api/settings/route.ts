@@ -17,7 +17,14 @@ export async function PATCH(request: Request) {
     const user = await requireApiUser();
     if (!user) return unauthorized();
     const settings = updateSettings(settingsSchema.parse(await request.json()), user.id);
-    return NextResponse.json({ settings });
+    const response = NextResponse.json({ settings });
+    response.cookies.set('suur_locale', settings.locale, {
+      path: '/',
+      maxAge: 365 * 24 * 60 * 60,
+      sameSite: 'lax',
+      secure: (process.env.SUUR_PUBLIC_URL || request.url).startsWith('https://'),
+    });
+    return response;
   } catch (error) {
     return handleApiError(error);
   }

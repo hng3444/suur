@@ -453,6 +453,19 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
   }, [settings.accent, settings.backgroundTone, settings.locale, settings.theme]);
 
   useEffect(() => {
+    const pageName = settingsOpen
+      ? translate(settings.locale, 'nav.settings')
+      : labelManagerOpen
+        ? translate(settings.locale, 'nav.labels')
+        : viewerNote
+          ? (viewerNote.title.trim() || translate(settings.locale, 'untitled'))
+          : editorNote
+            ? (editorNote.title.trim() || translate(settings.locale, 'editor.new'))
+            : viewTitle(view, activeLabel, settings.locale);
+    document.title = `${pageName} · ${branding.appName}`;
+  }, [activeLabel, branding.appName, editorNote, labelManagerOpen, settings.locale, settingsOpen, view, viewerNote]);
+
+  useEffect(() => {
     if (hydratedCacheKeyRef.current === cacheKey) void setCache(cacheKey, notes);
   }, [cacheKey, notes]);
 

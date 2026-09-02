@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
+import { attachmentResponseHeaders } from '@/lib/attachment-policy';
 import { uploadsDirectory } from '@/lib/db';
 import { getSharedAttachmentRecord } from '@/lib/repository';
 import { idParamSchema } from '@/lib/validation';
-import { attachmentResponseHeaders } from '@/lib/attachment-policy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,3 +28,4 @@ export async function GET(_: Request, context: Context) {
     return new NextResponse('Not found', { status: 404 });
   }
 }
+

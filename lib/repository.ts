@@ -553,7 +553,8 @@ function shareHash(token: string) {
 export function createNoteShare(noteId: string, userId: string) {
   const note = getDb().prepare('SELECT id FROM notes WHERE id = ? AND user_id = ? AND trashed_at IS NULL').get(noteId, userId);
   if (!note) return null;
-  const token = randomBytes(28).toString('base64url');
+  // 128 bits keeps public links unguessable while producing a compact 22-character URL token.
+  const token = randomBytes(16).toString('base64url');
   getDb().transaction(() => {
     getDb().prepare('DELETE FROM note_shares WHERE note_id = ? AND user_id = ?').run(noteId, userId);
     getDb().prepare('INSERT INTO note_shares (token_hash, note_id, user_id, created_at) VALUES (?, ?, ?, ?)').run(shareHash(token), noteId, userId, now());

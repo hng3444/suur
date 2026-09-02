@@ -23,6 +23,14 @@ export function LoginForm({ branding }: { branding: BrandingSettings }) {
     return () => window.clearTimeout(task);
   }, []);
 
+  useEffect(() => {
+    window.localStorage.setItem('suur-locale', locale);
+    document.cookie = `suur_locale=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    document.documentElement.lang = locale;
+    document.documentElement.dir = languages.find((language) => language.value === locale)?.dir || 'ltr';
+    document.title = `${translate(locale, 'page.login')} · ${branding.appName}`;
+  }, [branding.appName, locale]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -49,7 +57,7 @@ export function LoginForm({ branding }: { branding: BrandingSettings }) {
       <section className="login-stage">
         <header className="login-header">
           <div className="login-brand"><BrandMark branding={branding} /><strong>{branding.appName}</strong></div>
-          <select className="login-language" value={locale} aria-label="Language" onChange={(event) => { const value = event.target.value as Locale; setLocale(value); window.localStorage.setItem('suur-locale', value); }}>{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select>
+          <select className="login-language" value={locale} aria-label="Language" onChange={(event) => setLocale(event.target.value as Locale)}>{languages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}</select>
         </header>
 
         <section className="login-card">
