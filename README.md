@@ -4,7 +4,7 @@ Suur is an offline-first, self-hosted note-taking app inspired by the simplicity
 
 It runs as a single Docker container, stores persistent data in SQLite under `/data`, installs as a PWA, and keeps text and checklist edits available when the network drops.
 
-**Current release:** `v0.2.0`
+**Current release:** `v0.3.0`
 
 **Keywords:** self-hosted notes, offline-first notes app, private Google Keep alternative, Docker note-taking app, CasaOS notes, SQLite PWA.
 
@@ -54,6 +54,7 @@ It runs as a single Docker container, stores persistent data in SQLite under `/d
 - Familiar card-based workflow without copying Google branding or assets
 - Your notes, labels, accounts, settings, backups, and uploads stay on your server
 - Real offline app shell with an IndexedDB edit queue that syncs after reconnection
+- Versioned mobile synchronization API with snapshots, incremental cursors, and deletion tombstones
 - Single-container Docker deployment with persistent `/data` storage
 - Responsive desktop and mobile interface
 - Dark mode
@@ -201,7 +202,7 @@ ghcr.io/hng3444/suur:latest
 Current release:
 
 ```text
-ghcr.io/hng3444/suur:v0.2.0
+ghcr.io/hng3444/suur:v0.3.0
 ```
 
 ### Minimal Compose example
@@ -342,7 +343,9 @@ Text and checklist changes made while offline are:
 1. Stored locally
 2. Added to an offline mutation queue
 3. Replayed after reconnection
-4. Checked against note versions to reduce synchronization conflicts
+4. Confirmed with user-scoped mutation IDs so retries cannot duplicate changes
+5. Followed by incremental server changes and deletion records
+6. Preserved as a separate offline copy if another device edited the same version
 
 An internet connection is still required for:
 
@@ -357,7 +360,7 @@ An internet connection is still required for:
 
 Suur can be installed as a Progressive Web App on supported desktop and mobile browsers.
 
-Version 0.2.0 adds the server-side foundation for a proper Capacitor client that can connect to any compatible self-hosted Suur instance. It includes server discovery, API capability negotiation, 256-bit bearer sessions, explicit token revocation, and restricted CORS support for native app origins. The bundled Android client and its local synchronization database are the next development phase.
+Version 0.3.0 completes the offline storage and synchronization foundation for a proper Capacitor client that can connect to any compatible self-hosted Suur instance. It includes server discovery, API capability negotiation, revocable 256-bit bearer sessions, a per-server and per-user local database, a durable mutation queue, incremental cursor synchronization, deletion tombstones, and conflict copies. The native Android shell and first debug APK are the next development phase.
 
 See:
 
@@ -441,6 +444,7 @@ Examples:
 v0.1.1  Bug fixes and small improvements
 v0.1.2  Patch release
 v0.2.0  New features or larger changes
+v0.3.0  Offline mobile synchronization foundation
 v1.0.0  First stable release
 ```
 
@@ -453,7 +457,7 @@ ghcr.io/hng3444/suur:latest
 Stable releases can additionally be published with versioned tags such as:
 
 ```text
-ghcr.io/hng3444/suur:v0.2.0
+ghcr.io/hng3444/suur:v0.3.0
 ```
 
 ---
@@ -465,7 +469,7 @@ Suur is under active development.
 The current release is:
 
 ```text
-v0.2.0
+v0.3.0
 ```
 
 Test backups and upgrades on non-critical data before relying on a new release.

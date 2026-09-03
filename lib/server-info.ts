@@ -2,9 +2,10 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import packageJson from '@/package.json';
 import { getDb } from '@/lib/db';
+import { MOBILE_API_VERSION } from '@/lib/mobile-protocol';
 import { getBranding } from '@/lib/repository';
 
-export const MOBILE_API_VERSION = 1;
+export { MOBILE_API_VERSION } from '@/lib/mobile-protocol';
 const SERVER_ID_KEY = 'system.mobile_server_id';
 
 function serverId() {
@@ -40,6 +41,10 @@ export function getMobileServerInfo() {
       type: 'bearer',
       sessionEndpoint: '/api/mobile/auth/session',
     },
+    synchronization: {
+      endpoint: '/api/mobile/sync',
+      strategy: 'snapshot-delta',
+    },
     capabilities: {
       notes: true,
       checklists: true,
@@ -49,6 +54,7 @@ export function getMobileServerInfo() {
       noteHistory: true,
       mutationIds: true,
       offlineSync: true,
+      deltaSync: true,
       sharing: true,
       userAssignment: true,
     },

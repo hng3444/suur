@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { handleApiError, requireApiUser, unauthorized } from '@/lib/api';
+import { handleApiError, mutationId, requireApiUser, unauthorized } from '@/lib/api';
 import { createLabel, listLabels } from '@/lib/repository';
 import { labelCreateSchema } from '@/lib/validation';
 
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireApiUser();
     if (!user) return unauthorized();
-    const label = createLabel(labelCreateSchema.parse(await request.json()), user.id);
+    const label = createLabel(labelCreateSchema.parse(await request.json()), user.id, mutationId(request));
     return NextResponse.json({ label }, { status: 201 });
   } catch (error) {
     return handleApiError(error);

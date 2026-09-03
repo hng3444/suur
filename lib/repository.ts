@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getDb } from '@/lib/db';
+import type { MobileSyncChange, SyncEntityType, SyncOperation } from '@/lib/mobile-protocol';
 import type { AppSettings, Attachment, BrandingSettings, ChecklistItem, Label, Note, NoteView } from '@/lib/types';
 
 interface NoteRow {
@@ -30,6 +31,15 @@ interface LabelRow {
   color: string;
   created_at: string;
   updated_at: string;
+}
+
+interface SyncChangeRow {
+  user_id: string;
+  entity_type: SyncEntityType;
+  entity_id: string;
+  operation: SyncOperation;
+  sequence: number;
+  changed_at: string;
 }
 
 export interface AttachmentRow {
@@ -88,6 +98,39 @@ interface StoredBranding extends BrandingSettings {
 
 function now() {
   return new Date().toISOString();
+}
+
+function currentSyncCursor() {
+  return (getDb().prepare('SELECT sequence FROM sync_clock WHERE id = 1').get() as { sequence: number }).sequence;
+}
+
+function recordSyncChange(userId: string, entity: SyncEntityType, entityId: string, operation: SyncOperation) {
+  const database = getDb();
+  const { sequence } = database.prepare(
+    'UPDATE sync_clock SET sequence = sequence + 1 WHERE id = 1 RETURNING sequence',
+  ).get() as { sequence: number };
+  database.prepare(`
+    INSERT INTO sync_changes (user_id, entity_type, entity_id, operation, sequence, changed_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, entity_type, entity_id) DO UPDATE SET
+      operation = excluded.operation,
+      sequence = excluded.sequence,
+      changed_at = excluded.changed_at
+  `).run(userId, entity, entityId, operation, sequence, now());
+}
+
+function recordNoteAudienceChange(noteId: string, ownerId: string, assignedUserId: string | null, operation: SyncOperation) {
+  for (const userId of new Set([ownerId, assignedUserId].filter((value): value is string => Boolean(value)))) {
+    recordSyncChange(userId, 'note', noteId, operation);
+  }
+}
+
+function notesUsingLabel(labelId: string) {
+  return getDb().prepare(`
+    SELECT notes.id, notes.user_id, notes.assigned_user_id FROM notes
+    JOIN note_labels ON note_labels.note_id = notes.id
+    WHERE note_labels.label_id = ?
+  `).all(labelId) as Array<{ id: string; user_id: string; assigned_user_id: string | null }>;
 }
 
 function boundedEnvironmentNumber(name: string, fallback: number, minimum: number, maximum: number) {
@@ -222,23 +265,25 @@ function setNoteLabels(noteId: string, labelIds: string[], userId: string) {
   }
 }
 
-export function hasMutation(id: string | null) {
+export function hasMutation(id: string | null, userId: string) {
   if (!id) return false;
-  return Boolean(getDb().prepare('SELECT 1 FROM mutations WHERE id = ?').get(id));
+  return Boolean(getDb().prepare(
+    'SELECT 1 FROM mutations WHERE id = ? AND (user_id = ? OR user_id IS NULL)',
+  ).get(id, userId));
 }
 
-export function recordMutation(id: string | null, entityId: string, action: string) {
+export function recordMutation(id: string | null, entityId: string, action: string, userId: string) {
   if (!id) return;
   getDb().prepare(
-    'INSERT OR IGNORE INTO mutations (id, entity_id, action, created_at) VALUES (?, ?, ?, ?)',
-  ).run(id, entityId, action, now());
+    'INSERT OR IGNORE INTO mutations (id, user_id, entity_id, action, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(id, userId, entityId, action, now());
 }
 
 export function createNote(input: NoteInput, mutation: string | null, userId: string) {
   const database = getDb();
   const id = input.id || randomUUID();
 
-  if (hasMutation(mutation)) return getNote(id, userId);
+  if (hasMutation(mutation, userId)) return getNote(id, userId);
   const existing = getNote(id, userId);
   if (existing) return existing;
 
@@ -278,7 +323,8 @@ export function createNote(input: NoteInput, mutation: string | null, userId: st
       updatedAt,
     );
     setNoteLabels(id, input.labelIds ?? [], userId);
-    recordMutation(mutation, id, 'create');
+    recordNoteAudienceChange(id, userId, input.assignedUserId ?? null, 'upsert');
+    recordMutation(mutation, id, 'create', userId);
   });
   transaction();
   return getNote(id, userId);
@@ -288,7 +334,7 @@ export function updateNote(id: string, input: NoteInput, mutation: string | null
   const database = getDb();
   const current = getNote(id, userId);
   if (!current) return { status: 'missing' as const, note: null };
-  if (hasMutation(mutation)) return { status: 'ok' as const, note: current };
+  if (hasMutation(mutation, userId)) return { status: 'ok' as const, note: current };
   if (input.baseVersion && input.baseVersion !== current.version) {
     return { status: 'conflict' as const, note: current };
   }
@@ -336,7 +382,12 @@ export function updateNote(id: string, input: NoteInput, mutation: string | null
     assignments.push('version = version + 1', 'updated_at = ?');
     values.push(now(), id, userId, userId);
     database.prepare(`UPDATE notes SET ${assignments.join(', ')} WHERE id = ? AND (user_id = ? OR assigned_user_id = ?)`).run(...values);
-    recordMutation(mutation, id, 'update');
+    const updated = database.prepare('SELECT user_id, assigned_user_id FROM notes WHERE id = ?').get(id) as { user_id: string; assigned_user_id: string | null };
+    if (current.assignedUserId && current.assignedUserId !== updated.assigned_user_id) {
+      recordSyncChange(current.assignedUserId, 'note', id, 'delete');
+    }
+    recordNoteAudienceChange(id, updated.user_id, updated.assigned_user_id, 'upsert');
+    recordMutation(mutation, id, 'update', userId);
   });
   transaction();
   return { status: 'ok' as const, note: getNote(id, userId) };
@@ -344,7 +395,10 @@ export function updateNote(id: string, input: NoteInput, mutation: string | null
 
 export function permanentlyDeleteNote(id: string, mutation: string | null, userId: string) {
   const database = getDb();
-  if (hasMutation(mutation)) return { deleted: true, storedNames: [] as string[] };
+  if (hasMutation(mutation, userId)) return { deleted: true, storedNames: [] as string[] };
+  const note = database.prepare(
+    'SELECT user_id, assigned_user_id FROM notes WHERE id = ? AND user_id = ?',
+  ).get(id, userId) as { user_id: string; assigned_user_id: string | null } | undefined;
   const storedNames = (database.prepare(`
     SELECT attachments.stored_name FROM attachments JOIN notes ON notes.id = attachments.note_id
     WHERE attachments.note_id = ? AND notes.user_id = ?
@@ -353,7 +407,10 @@ export function permanentlyDeleteNote(id: string, mutation: string | null, userI
   );
   const transaction = database.transaction(() => {
     const result = database.prepare('DELETE FROM notes WHERE id = ? AND user_id = ?').run(id, userId);
-    recordMutation(mutation, id, 'delete');
+    if (result.changes && note) {
+      recordNoteAudienceChange(id, note.user_id, note.assigned_user_id, 'delete');
+      recordMutation(mutation, id, 'delete', userId);
+    }
     return result.changes > 0;
   });
   return { deleted: transaction(), storedNames };
@@ -365,20 +422,35 @@ export function deleteExpiredTrash(userId: string, cutoff: string) {
     SELECT attachments.stored_name FROM attachments JOIN notes ON notes.id = attachments.note_id
     WHERE notes.user_id = ? AND notes.trashed_at IS NOT NULL AND notes.trashed_at < ?
   `).all(userId, cutoff) as Array<{ stored_name: string }>;
-  const deleted = database.prepare('DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?').run(userId, cutoff).changes;
+  const notes = database.prepare(`
+    SELECT id, user_id, assigned_user_id FROM notes
+    WHERE user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?
+  `).all(userId, cutoff) as Array<{ id: string; user_id: string; assigned_user_id: string | null }>;
+  const deleted = database.transaction(() => {
+    const changes = database.prepare(
+      'DELETE FROM notes WHERE user_id = ? AND trashed_at IS NOT NULL AND trashed_at < ?',
+    ).run(userId, cutoff).changes;
+    for (const note of notes) recordNoteAudienceChange(note.id, note.user_id, note.assigned_user_id, 'delete');
+    return changes;
+  })();
   return { deleted, storedNames: records.map((record) => record.stored_name) };
 }
 
 export function reorderNotes(positions: Array<{ id: string; position: number }>, mutation: string | null, userId: string) {
-  if (hasMutation(mutation)) return;
+  if (hasMutation(mutation, userId)) return;
   const database = getDb();
   const statement = database.prepare(
     'UPDATE notes SET position = ?, version = version + 1, updated_at = ? WHERE id = ? AND (user_id = ? OR assigned_user_id = ?)',
   );
   database.transaction(() => {
     const timestamp = now();
-    for (const item of positions) statement.run(item.position, timestamp, item.id, userId, userId);
-    recordMutation(mutation, positions[0].id, 'reorder');
+    for (const item of positions) {
+      const result = statement.run(item.position, timestamp, item.id, userId, userId);
+      if (!result.changes) continue;
+      const note = database.prepare('SELECT user_id, assigned_user_id FROM notes WHERE id = ?').get(item.id) as { user_id: string; assigned_user_id: string | null };
+      recordNoteAudienceChange(item.id, note.user_id, note.assigned_user_id, 'upsert');
+    }
+    recordMutation(mutation, positions[0].id, 'reorder', userId);
   })();
 }
 
@@ -386,29 +458,60 @@ export function listLabels(userId: string) {
   return (getDb().prepare('SELECT * FROM labels WHERE user_id = ? ORDER BY name COLLATE NOCASE').all(userId) as LabelRow[]).map(toLabel);
 }
 
-export function createLabel(input: { name: string; color: string }, userId: string) {
-  const id = randomUUID();
-  const timestamp = now();
-  getDb().prepare(
-    'INSERT INTO labels (id, user_id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-  ).run(id, userId, input.name, input.color, timestamp, timestamp);
-  return toLabel(getDb().prepare('SELECT * FROM labels WHERE id = ?').get(id) as LabelRow);
+export function getLabel(id: string, userId: string) {
+  const row = getDb().prepare('SELECT * FROM labels WHERE id = ? AND user_id = ?').get(id, userId) as LabelRow | undefined;
+  return row ? toLabel(row) : null;
 }
 
-export function updateLabel(id: string, input: { name?: string; color?: string }, userId: string) {
+export function createLabel(input: { id?: string; name: string; color: string }, userId: string, mutation: string | null = null) {
+  const id = input.id || randomUUID();
+  if (hasMutation(mutation, userId)) return getLabel(id, userId);
+  const existing = getLabel(id, userId);
+  if (existing) return existing;
+  const timestamp = now();
+  getDb().transaction(() => {
+    getDb().prepare(
+      'INSERT INTO labels (id, user_id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(id, userId, input.name, input.color, timestamp, timestamp);
+    recordSyncChange(userId, 'label', id, 'upsert');
+    recordMutation(mutation, id, 'label-create', userId);
+  })();
+  return getLabel(id, userId);
+}
+
+export function updateLabel(id: string, input: { name?: string; color?: string }, userId: string, mutation: string | null = null) {
+  if (hasMutation(mutation, userId)) return getLabel(id, userId);
   const assignments: string[] = [];
   const values: unknown[] = [];
   if (input.name !== undefined) { assignments.push('name = ?'); values.push(input.name); }
   if (input.color !== undefined) { assignments.push('color = ?'); values.push(input.color); }
   assignments.push('updated_at = ?');
   values.push(now(), id, userId);
-  const result = getDb().prepare(`UPDATE labels SET ${assignments.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);
+  const result = getDb().transaction(() => {
+    const update = getDb().prepare(`UPDATE labels SET ${assignments.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);
+    if (update.changes) {
+      recordSyncChange(userId, 'label', id, 'upsert');
+      for (const note of notesUsingLabel(id)) recordNoteAudienceChange(note.id, note.user_id, note.assigned_user_id, 'upsert');
+      recordMutation(mutation, id, 'label-update', userId);
+    }
+    return update;
+  })();
   if (!result.changes) return null;
-  return toLabel(getDb().prepare('SELECT * FROM labels WHERE id = ?').get(id) as LabelRow);
+  return getLabel(id, userId);
 }
 
-export function deleteLabel(id: string, userId: string) {
-  return getDb().prepare('DELETE FROM labels WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
+export function deleteLabel(id: string, userId: string, mutation: string | null = null) {
+  if (hasMutation(mutation, userId)) return true;
+  return getDb().transaction(() => {
+    const affectedNotes = notesUsingLabel(id);
+    const deleted = getDb().prepare('DELETE FROM labels WHERE id = ? AND user_id = ?').run(id, userId).changes > 0;
+    if (deleted) {
+      recordSyncChange(userId, 'label', id, 'delete');
+      for (const note of affectedNotes) recordNoteAudienceChange(note.id, note.user_id, note.assigned_user_id, 'upsert');
+      recordMutation(mutation, id, 'label-delete', userId);
+    }
+    return deleted;
+  })();
 }
 
 export function getSettings(userId: string): AppSettings {
@@ -420,7 +523,8 @@ export function getSettings(userId: string): AppSettings {
   return settings;
 }
 
-export function updateSettings(input: Partial<AppSettings>, userId: string) {
+export function updateSettings(input: Partial<AppSettings>, userId: string, mutation: string | null = null) {
+  if (hasMutation(mutation, userId)) return getSettings(userId);
   const database = getDb();
   const statement = database.prepare(`
     INSERT INTO user_settings (user_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)
@@ -429,8 +533,63 @@ export function updateSettings(input: Partial<AppSettings>, userId: string) {
   database.transaction(() => {
     const timestamp = now();
     for (const [key, value] of Object.entries(input)) statement.run(userId, key, JSON.stringify(value), timestamp);
+    recordSyncChange(userId, 'settings', 'settings', 'upsert');
+    recordMutation(mutation, 'settings', 'settings-update', userId);
   })();
   return getSettings(userId);
+}
+
+export function getSyncSnapshot(userId: string) {
+  const database = getDb();
+  return database.transaction(() => {
+    const notes = hydrateRows(database.prepare(`
+      SELECT * FROM notes WHERE user_id = ? OR assigned_user_id = ?
+      ORDER BY pinned DESC, position ASC, updated_at DESC
+    `).all(userId, userId) as NoteRow[]);
+    return {
+      cursor: currentSyncCursor(),
+      notes,
+      labels: listLabels(userId),
+      settings: getSettings(userId),
+    };
+  })();
+}
+
+export function getSyncChanges(userId: string, cursor: number, limit: number) {
+  const database = getDb();
+  return database.transaction(() => {
+    const serverCursor = currentSyncCursor();
+    if (cursor > serverCursor) return { resetRequired: true as const, serverCursor };
+
+    const rows = database.prepare(`
+      SELECT * FROM sync_changes
+      WHERE user_id = ? AND sequence > ?
+      ORDER BY sequence ASC
+      LIMIT ?
+    `).all(userId, cursor, limit + 1) as SyncChangeRow[];
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const changes: MobileSyncChange[] = page.map((row) => {
+      if (row.operation === 'delete') {
+        return { cursor: row.sequence, entity: row.entity_type, id: row.entity_id, operation: 'delete', data: null };
+      }
+      const data = row.entity_type === 'note'
+        ? getNote(row.entity_id, userId)
+        : row.entity_type === 'label'
+          ? getLabel(row.entity_id, userId)
+          : getSettings(userId);
+      return data
+        ? { cursor: row.sequence, entity: row.entity_type, id: row.entity_id, operation: 'upsert', data }
+        : { cursor: row.sequence, entity: row.entity_type, id: row.entity_id, operation: 'delete', data: null };
+    });
+    return {
+      resetRequired: false as const,
+      serverCursor,
+      cursor: hasMore && page.length ? page[page.length - 1].sequence : serverCursor,
+      hasMore,
+      changes,
+    };
+  })();
 }
 
 export function getStoredBranding(): StoredBranding {
@@ -471,10 +630,14 @@ export function updateBranding(input: { appName?: string; iconStoredName?: strin
 
 export function addAttachment(input: Omit<AttachmentRow, 'created_at'>) {
   const timestamp = now();
-  getDb().prepare(`
-    INSERT INTO attachments (id, note_id, filename, stored_name, mime_type, size, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(input.id, input.note_id, input.filename, input.stored_name, input.mime_type, input.size, timestamp);
+  getDb().transaction(() => {
+    getDb().prepare(`
+      INSERT INTO attachments (id, note_id, filename, stored_name, mime_type, size, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(input.id, input.note_id, input.filename, input.stored_name, input.mime_type, input.size, timestamp);
+    const note = getDb().prepare('SELECT user_id, assigned_user_id FROM notes WHERE id = ?').get(input.note_id) as { user_id: string; assigned_user_id: string | null };
+    recordNoteAudienceChange(input.note_id, note.user_id, note.assigned_user_id, 'upsert');
+  })();
   return toAttachment(getDb().prepare('SELECT * FROM attachments WHERE id = ?').get(input.id) as AttachmentRow);
 }
 
@@ -488,7 +651,11 @@ export function getAttachmentRecord(id: string, userId: string) {
 export function deleteAttachment(id: string, userId: string) {
   const record = getAttachmentRecord(id, userId);
   if (!record) return null;
-  getDb().prepare('DELETE FROM attachments WHERE id = ?').run(id);
+  const note = getDb().prepare('SELECT user_id, assigned_user_id FROM notes WHERE id = ?').get(record.note_id) as { user_id: string; assigned_user_id: string | null };
+  getDb().transaction(() => {
+    getDb().prepare('DELETE FROM attachments WHERE id = ?').run(id);
+    recordNoteAudienceChange(record.note_id, note.user_id, note.assigned_user_id, 'upsert');
+  })();
   return record;
 }
 

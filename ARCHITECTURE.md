@@ -11,7 +11,8 @@ Suur is a modular monolith packaged as one container. This keeps installation, m
 5. Uploaded files live below `/data/uploads`; their ownership and metadata stay in SQLite.
 6. A private service-worker cache stores the authenticated application shell and static assets.
 7. A per-user IndexedDB database caches notes and queues offline mutations.
-8. Reconnection replays idempotent mutations. Version conflicts preserve the client content as a separate conflict copy.
+8. Reconnection replays idempotent mutations, then downloads cursor-based note, label, settings, and deletion changes.
+9. Version conflicts preserve client content as a deterministic separate offline copy.
 
 ## Main directories
 
@@ -36,6 +37,9 @@ lib/
   portable.ts             export, import, backup, and restore
   validation.ts           Zod schemas
   offline.ts              IndexedDB cache and mutation queue
+  mobile-offline-store.ts per-server and per-user mobile local database
+  mobile-sync.ts          platform-independent push/pull synchronization engine
+  mobile-protocol.ts      versioned mobile synchronization response types
   i18n.ts                 ten-language message catalog
 public/
   sw.js                   private offline shell and asset caching
@@ -65,6 +69,8 @@ Docker Compose mounts this directory from `suur-data` by default. CasaOS uses `/
 The service worker caches a successful authenticated navigation under a private synthetic key. It never places note-list API responses in a shared HTTP cache. Structured note data is stored in a user-namespaced IndexedDB database instead.
 
 Offline create, patch, reorder, and delete operations receive unique mutation IDs. The server records processed IDs for 30 days, making reconnect retries idempotent. Note updates include a base version. If another device changed the same note, Suur creates a conflict copy instead of silently overwriting client content.
+
+Mobile API version 2 adds a consistent initial snapshot and an incremental cursor feed at `/api/mobile/sync`. SQLite keeps one current change marker per user and entity, including deletion tombstones. The mobile store separates data by stable server ID and user ID; bearer credentials are intentionally stored outside that database.
 
 Signing out deletes the private service-worker cache and the current user's IndexedDB database from that browser.
 

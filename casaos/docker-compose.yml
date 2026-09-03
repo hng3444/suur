@@ -67,8 +67,8 @@ x-casaos:
   architectures:
     - amd64
     - arm64
-  version: "0.2.0"
-  update_at: "2026-09-02"
+  version: "0.3.0"
+  update_at: "2026-09-03"
   website: https://github.com/hng3444/suur
   repo: https://github.com/hng3444/suur
   support: https://github.com/hng3444/suur/issues

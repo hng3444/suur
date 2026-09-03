@@ -87,7 +87,7 @@ export async function importGoogleKeep(file: File, userId: string) {
         const key = name.toLocaleLowerCase('tr');
         let label = labelByName.get(key);
         if (!label) {
-          try { label = createLabel({ name, color: '#198754' }, userId); } catch { label = undefined; }
+          try { label = createLabel({ name, color: '#198754' }, userId) || undefined; } catch { label = undefined; }
           if (label) labelByName.set(key, label);
         }
         if (label) labelIds.push(label.id);

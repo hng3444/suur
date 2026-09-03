@@ -6,6 +6,7 @@ export interface MobileServerInfo {
   apiVersion: number;
   apiBasePath: string;
   authentication: { type: 'bearer'; sessionEndpoint: string };
+  synchronization?: { endpoint: string; strategy: 'snapshot-delta' };
   capabilities: Record<string, boolean>;
   limits: { maxUploadBytes: number };
   requiresHttps: boolean;

@@ -47,19 +47,19 @@ test('mobile discovery and sign-in never follow redirects or send browser cookie
     requests.push({ url, options });
     if (String(url).endsWith('/api/mobile/server')) {
       return Response.json({
-        service: 'suur', serverId: 'server-1', name: 'Suur', version: '0.2.0', apiVersion: 1,
+        service: 'suur', serverId: 'server-1', name: 'Suur', version: '0.3.0', apiVersion: 2,
         apiBasePath: '/api', authentication: { type: 'bearer', sessionEndpoint: '/api/mobile/auth/session' },
         capabilities: {}, limits: { maxUploadBytes: 1 }, requiresHttps: true,
       });
     }
     return Response.json({
-      token: 'a'.repeat(43), tokenType: 'Bearer', expiresAt: new Date().toISOString(), apiVersion: 1,
+      token: 'a'.repeat(43), tokenType: 'Bearer', expiresAt: new Date().toISOString(), apiVersion: 2,
       user: { id: 'u1', username: 'user', displayName: 'User', mustChangePassword: false },
     });
   };
   await discoverSuurServer('notes.example.com', fetcher);
   await createRemoteMobileSession({
-    serverUrl: 'notes.example.com', username: 'user', password: 'secret', deviceName: 'Phone', platform: 'android', clientVersion: '0.2.0',
+    serverUrl: 'notes.example.com', username: 'user', password: 'secret', deviceName: 'Phone', platform: 'android', clientVersion: '0.3.0',
   }, fetcher);
   assert.equal(requests.length, 2);
   for (const request of requests) {

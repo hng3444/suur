@@ -109,6 +109,7 @@ export async function destroySession() {
 
 export async function getCurrentUser() {
   const authorization = (await headers()).get('authorization');
+  const sessionType = authorization === null ? 'web' : 'mobile';
   const token = authorization === null
     ? (await cookies()).get(COOKIE_NAME)?.value
     : parseBearerAuthorization(authorization);
@@ -116,7 +117,18 @@ export async function getCurrentUser() {
   const row = getDb().prepare(`
     SELECT users.* FROM sessions
     JOIN users ON users.id = sessions.user_id
-    WHERE sessions.token_hash = ? AND sessions.expires_at > ?
+    WHERE sessions.token_hash = ? AND sessions.session_type = ? AND sessions.expires_at > ?
+  `).get(tokenHash(token), sessionType, new Date().toISOString()) as UserRow | undefined;
+  return row ? toUser(row) : null;
+}
+
+export async function getCurrentMobileUser() {
+  const token = parseBearerAuthorization((await headers()).get('authorization'));
+  if (!token) return null;
+  const row = getDb().prepare(`
+    SELECT users.* FROM sessions
+    JOIN users ON users.id = sessions.user_id
+    WHERE sessions.token_hash = ? AND sessions.session_type = 'mobile' AND sessions.expires_at > ?
   `).get(tokenHash(token), new Date().toISOString()) as UserRow | undefined;
   return row ? toUser(row) : null;
 }

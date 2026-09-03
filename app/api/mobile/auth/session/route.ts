@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authenticateCredentials, createMobileSession, getCurrentUser, revokeSessionToken } from '@/lib/auth';
+import { authenticateCredentials, createMobileSession, getCurrentMobileUser, revokeSessionToken } from '@/lib/auth';
 import { handleApiError } from '@/lib/api';
 import { MOBILE_API_VERSION } from '@/lib/server-info';
 import { parseBearerAuthorization } from '@/lib/session-token';
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const user = await getCurrentUser();
+  const user = await getCurrentMobileUser();
   return user
     ? NextResponse.json({ user, apiVersion: MOBILE_API_VERSION }, { headers: { 'Cache-Control': 'no-store' } })
     : mobileError('Oturum açmanız gerekiyor.', 401, 'UNAUTHORIZED');

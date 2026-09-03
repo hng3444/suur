@@ -51,11 +51,12 @@ export const reorderSchema = z.object({
 });
 
 export const labelCreateSchema = z.object({
+  id: idSchema.optional(),
   name: z.string().trim().min(1).max(80),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#198754'),
 });
 
-export const labelUpdateSchema = labelCreateSchema.partial().refine(
+export const labelUpdateSchema = labelCreateSchema.omit({ id: true }).partial().refine(
   (value) => Object.keys(value).length > 0,
   'En az bir alan gerekli.',
 );
@@ -85,6 +86,11 @@ export const mobileLoginSchema = loginSchema.extend({
   deviceName: z.string().trim().min(1).max(100),
   platform: z.enum(['android', 'ios']).default('android'),
   clientVersion: z.string().trim().min(1).max(40),
+});
+
+export const mobileSyncQuerySchema = z.object({
+  cursor: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 
 const usernameSchema = z.string().trim().min(3).max(40).regex(/^[a-zA-Z0-9._-]+$/, 'Kullanıcı adı yalnızca harf, rakam, nokta, tire ve alt çizgi içerebilir.');

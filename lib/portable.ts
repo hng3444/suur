@@ -143,7 +143,7 @@ function importNotes(data: { labels: Label[]; notes: Note[] }, userId: string) {
     const key = label.name.toLocaleLowerCase();
     if (!labelByName.has(key)) {
       const created = createLabel({ name: label.name.slice(0, 80), color: /^#[0-9a-f]{6}$/i.test(label.color) ? label.color : '#198754' }, userId);
-      labelByName.set(key, created);
+      if (created) labelByName.set(key, created);
     }
   }
   const noteMap = new Map<string, string>();
