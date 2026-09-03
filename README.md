@@ -4,7 +4,7 @@ Suur is an offline-first, self-hosted note-taking app inspired by the simplicity
 
 It runs as a single Docker container, stores persistent data in SQLite under `/data`, installs as a PWA, and keeps text and checklist edits available when the network drops.
 
-**Current release:** `v0.1.1`
+**Current release:** `v0.2.0`
 
 **Keywords:** self-hosted notes, offline-first notes app, private Google Keep alternative, Docker note-taking app, CasaOS notes, SQLite PWA.
 
@@ -84,7 +84,6 @@ It runs as a single Docker container, stores persistent data in SQLite under `/d
 - Grid and list layouts
 - Drag-to-sort
 - Keyboard shortcuts
-- Note templates
 
 ### Productivity
 
@@ -202,7 +201,7 @@ ghcr.io/hng3444/suur:latest
 Current release:
 
 ```text
-ghcr.io/hng3444/suur:v0.1.1
+ghcr.io/hng3444/suur:v0.2.0
 ```
 
 ### Minimal Compose example
@@ -354,11 +353,11 @@ An internet connection is still required for:
 
 ---
 
-## PWA and future Android app
+## PWA and Android client foundation
 
 Suur can be installed as a Progressive Web App on supported desktop and mobile browsers.
 
-The responsive offline-capable web layer can also serve as the foundation for a future Android Trusted Web Activity or native wrapper.
+Version 0.2.0 adds the server-side foundation for a proper Capacitor client that can connect to any compatible self-hosted Suur instance. It includes server discovery, API capability negotiation, 256-bit bearer sessions, explicit token revocation, and restricted CORS support for native app origins. The bundled Android client and its local synchronization database are the next development phase.
 
 See:
 
@@ -372,6 +371,9 @@ Suur includes several security measures:
 
 - Passwords are hashed with scrypt and a unique random salt
 - Session tokens are stored as SHA-256 hashes
+- Mobile bearer tokens are returned only when created and expire after 90 days
+- Production mobile sign-in requires HTTPS
+- Cross-origin API access uses an exact allowlist and never enables credential cookies
 - Authentication cookies are HttpOnly
 - Cookies use `SameSite=Strict`
 - HTTPS cookies are enabled when `SUUR_PUBLIC_URL` starts with `https://`
@@ -451,7 +453,7 @@ ghcr.io/hng3444/suur:latest
 Stable releases can additionally be published with versioned tags such as:
 
 ```text
-ghcr.io/hng3444/suur:v0.1.1
+ghcr.io/hng3444/suur:v0.2.0
 ```
 
 ---
@@ -463,7 +465,7 @@ Suur is under active development.
 The current release is:
 
 ```text
-v0.1.1
+v0.2.0
 ```
 
 Test backups and upgrades on non-critical data before relying on a new release.

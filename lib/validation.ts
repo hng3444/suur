@@ -81,6 +81,12 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(500),
 });
 
+export const mobileLoginSchema = loginSchema.extend({
+  deviceName: z.string().trim().min(1).max(100),
+  platform: z.enum(['android', 'ios']).default('android'),
+  clientVersion: z.string().trim().min(1).max(40),
+});
+
 const usernameSchema = z.string().trim().min(3).max(40).regex(/^[a-zA-Z0-9._-]+$/, 'Kullanıcı adı yalnızca harf, rakam, nokta, tire ve alt çizgi içerebilir.');
 const passwordSchema = z.string().min(7).max(200);
 

@@ -85,7 +85,7 @@ export function NoteCard({
     <div className={`note-card-shell note-${note.color} ${layout === 'list' ? 'note-card-shell-list' : ''} ${selectionMode ? 'selection-mode' : ''} ${selected ? 'selected' : ''}`}>
       <button className="note-select" aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onSelect(note); }} aria-label={selected ? ui('Seçimi kaldır', 'Clear selection') : ui('Notu seç', 'Select note')}>{selected && <Check size={15} />}</button>
       <article
-      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${selected ? 'selected' : ''}`}
+      className={`note-card note-${note.color} ${layout === 'list' ? 'note-card-list' : ''} ${cover ? 'has-cover' : ''} ${selected ? 'selected' : ''}`}
       onClick={() => {
         if (suppressClick.current) { suppressClick.current = false; return; }
         if (selectionMode) onSelect(note); else onOpen(note);

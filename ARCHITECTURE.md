@@ -4,7 +4,7 @@ Suur is a modular monolith packaged as one container. This keeps installation, m
 
 ## Request and data flow
 
-1. The Next.js client calls authenticated `/api/*` route handlers.
+1. The Next.js client uses an HttpOnly session cookie; mobile clients use a revocable bearer session against the same authenticated `/api/*` route handlers.
 2. Zod validates request bodies, query values, identifiers, settings, and user input.
 3. The repository layer performs authorization-aware SQLite operations.
 4. `better-sqlite3` stores structured data in `/data/suur.db` using WAL mode.
@@ -18,7 +18,8 @@ Suur is a modular monolith packaged as one container. This keeps installation, m
 ```text
 app/
   api/                    REST route handlers
-  share/[token]/          public read-only note page
+  api/mobile/             server discovery and mobile session endpoints
+  s/[token]/              public read-only note page
   globals.css             design system and responsive layouts
   layout.tsx              PWA and metadata configuration
 components/
@@ -29,6 +30,7 @@ components/
   calendar-view.tsx       reminder calendar
 lib/
   auth.ts                 scrypt passwords and session management
+  cors.ts                 exact native-app origin allowlist
   db.ts                   SQLite setup and additive migrations
   repository.ts           authorized data-access layer
   portable.ts             export, import, backup, and restore
@@ -41,6 +43,8 @@ public/
 casaos/
   docker-compose.yml      CasaOS App Store source manifest
 ```
+
+`proxy.ts` handles API preflight requests and adds the mobile API version and restricted CORS headers. Authentication and authorization remain inside the route and repository layers.
 
 ## Persistent storage
 
@@ -71,6 +75,8 @@ A portable Suur backup is a ZIP archive containing `manifest.json` and attachmen
 ## Security boundaries
 
 - The server is authoritative for authentication, ownership, assignment, quotas, and validation.
+- Web sessions use HttpOnly cookies. Mobile sessions use 256-bit bearer tokens whose SHA-256 hashes, type, device description, and expiry are stored in SQLite.
+- Cross-origin access is limited to Capacitor origins and explicitly configured exact origins; wildcard origins and cross-origin credential cookies are rejected.
 - Assigned users may edit an assigned note; only its owner can permanently delete or publish it.
 - Public sharing uses a random opaque token whose SHA-256 hash is stored in SQLite.
 - Markdown is rendered as React elements without injecting raw HTML.

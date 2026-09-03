@@ -4,7 +4,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypt
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
-const SCHEMA_REVISION = 2;
+const SCHEMA_REVISION = 3;
 const globalForSuur = globalThis as unknown as { suurDb?: Database.Database; suurSchemaRevision?: number };
 
 export function dataDirectory() {
@@ -52,9 +52,13 @@ function ensureRuntimeSchema(database: Database.Database) {
   ensureColumn(database, 'notes', 'content_format', "content_format TEXT NOT NULL DEFAULT 'plain'");
   ensureColumn(database, 'notes', 'assigned_user_id', 'assigned_user_id TEXT REFERENCES users(id) ON DELETE SET NULL');
   ensureColumn(database, 'note_versions', 'changed_by_user_id', 'changed_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL');
+  ensureColumn(database, 'sessions', 'session_type', "session_type TEXT NOT NULL DEFAULT 'web' CHECK (session_type IN ('web', 'mobile'))");
+  ensureColumn(database, 'sessions', 'device_name', 'device_name TEXT');
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_notes_assigned_user
       ON notes (assigned_user_id, trashed_at, archived, position);
+    CREATE INDEX IF NOT EXISTS idx_sessions_type_expiry
+      ON sessions (session_type, expires_at);
   `);
 }
 
@@ -120,7 +124,9 @@ function initializeDatabase() {
       token_hash TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      session_type TEXT NOT NULL DEFAULT 'web' CHECK (session_type IN ('web', 'mobile')),
+      device_name TEXT
     );
 
     CREATE TABLE IF NOT EXISTS notes (
@@ -225,6 +231,8 @@ function initializeDatabase() {
       ON note_versions (note_id, version DESC);
     CREATE INDEX IF NOT EXISTS idx_sessions_user_expiry
       ON sessions (user_id, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_type_expiry
+      ON sessions (session_type, expires_at);
   `);
 
   const timestamp = new Date().toISOString();

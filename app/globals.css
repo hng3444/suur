@@ -190,8 +190,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 @media (hover: hover) and (pointer: fine) { .note-card-shell:hover .note-select, .note-card-shell:focus-within .note-select { opacity: 1; pointer-events: auto; transform: scale(1); } }
 .note-select[aria-pressed='true'] { border-color: var(--green); background: var(--green); opacity: 1; transform: scale(1); }
 .note-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow); transform: translateY(-1px); }
-.note-card-list { display: grid; grid-template-columns: auto 1fr; }
-.note-card-list .note-cover { width: min(220px, 36%); height: auto; align-self: start; }
+.note-card-list { display: grid; grid-template-columns: minmax(0, 1fr); }
+.note-card-list.has-cover { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); }
+.note-card-list .note-cover { width: 100%; height: 100%; max-height: 280px; align-self: stretch; object-fit: contain; border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-bottom: 0; }
 .note-cover { display: block; width: 100%; height: auto; object-fit: contain; background: color-mix(in srgb, var(--note-bg) 80%, var(--surface-soft)); border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .note-card-body { min-width: 0; padding: 17px 17px 11px; }
 .note-card-heading { display: flex; align-items: flex-start; gap: 8px; }
@@ -544,8 +545,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   .bulk-close { grid-column: 2; grid-row: 1; }
   .notes-grid, .masonry-column { gap: 10px; }
   .notes-grid.list-view { grid-template-columns: 1fr; }
-  .note-card-list { display: block; }
-  .note-card-list .note-cover, .note-cover { width: 100%; height: auto; }
+  .note-card-list, .note-card-list.has-cover { display: block; }
+  .note-card-list .note-cover, .note-cover { width: 100%; height: auto; max-height: none; border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
   .note-card-body { padding: 14px 13px 8px; }
   .note-card h2 { font-size: 14px; }
   .note-content { font-size: 12.5px; -webkit-line-clamp: 9; }

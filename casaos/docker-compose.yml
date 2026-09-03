@@ -19,6 +19,8 @@ services:
       SUUR_FORCE_DEFAULT_PASSWORD_CHANGE: "true"
       SUUR_MAINTENANCE_INTERVAL_MINUTES: "60"
       SUUR_TRUST_PROXY: "false"
+      SUUR_ALLOWED_APP_ORIGINS: ""
+      SUUR_ALLOW_INSECURE_MOBILE: "false"
       SUUR_NOTE_HISTORY_LIMIT: "100"
       SUUR_MAX_NOTES_PER_USER: "50000"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -65,8 +67,8 @@ x-casaos:
   architectures:
     - amd64
     - arm64
-  version: "0.1.2"
-  update_at: "2026-08-30"
+  version: "0.2.0"
+  update_at: "2026-09-02"
   website: https://github.com/hng3444/suur
   repo: https://github.com/hng3444/suur
   support: https://github.com/hng3444/suur/issues

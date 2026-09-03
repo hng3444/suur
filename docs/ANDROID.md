@@ -1,16 +1,54 @@
-# Android APK readiness
+# Android client foundation
 
-Suur's responsive UI, web manifest, service worker, private offline shell, and IndexedDB mutation queue form the reusable layer for an Android package.
+Suur's Android client will be a Capacitor application with a bundled interface. It will connect to any compatible self-hosted Suur server instead of embedding one fixed website. The server remains the source of truth while the client keeps an encrypted local session token and, in the next phase, a local notes database and mutation queue.
 
-The recommended future packaging path is a Trusted Web Activity generated with Bubblewrap. It keeps the production server as the synchronization source while presenting Suur as a standalone Android app. The public HTTPS origin must serve a valid Digital Asset Links file containing the final Android package name and signing-certificate fingerprint.
+## Server discovery
 
-Before producing a release APK:
+The client starts by normalizing the user-provided HTTPS address and requesting:
 
-1. Choose a permanent HTTPS origin and Android application ID.
-2. Generate and securely store the Android signing key.
-3. Add `/.well-known/assetlinks.json` with the real certificate fingerprint.
-4. Generate the TWA project and configure the start URL as `/`.
-5. Verify offline cold start, queued edits, file permissions, microphone permission, and reconnection on physical devices.
-6. Build signed AAB/APK artifacts through a reproducible CI release workflow.
+```text
+GET /api/mobile/server
+```
 
-Do not place server credentials or a GitHub token inside the APK. Users still authenticate to their own Suur server, and synchronization remains protected by the existing session and API authorization model.
+The response contains the stable server ID, display name, Suur version, mobile API version, supported capabilities, upload limit, and authentication endpoint. The stable server ID prevents data from two servers with the same hostname or display name from being mixed locally.
+
+## Mobile authentication
+
+Create a mobile session:
+
+```http
+POST /api/mobile/auth/session
+Content-Type: application/json
+
+{
+  "username": "user",
+  "password": "password",
+  "deviceName": "Galaxy S23",
+  "platform": "android",
+  "clientVersion": "0.2.0"
+}
+```
+
+The response returns a 256-bit bearer token once. The Android client must store it with the platform's secure credential storage and send it on subsequent API requests:
+
+```http
+Authorization: Bearer TOKEN
+```
+
+Validate a stored session with `GET /api/mobile/auth/session` and revoke it with `DELETE /api/mobile/auth/session`.
+
+Do not store the user's password, place credentials in the APK, or write bearer tokens to logs. Production mobile sessions require HTTPS. `SUUR_ALLOW_INSECURE_MOBILE=true` exists only for deliberate local development and must not be used for an internet-facing deployment.
+
+## Cross-origin requests
+
+Suur accepts API requests from Capacitor's standard `http://localhost`, `https://localhost`, and `capacitor://localhost` origins. Additional exact origins can be configured as a comma-separated list:
+
+```dotenv
+SUUR_ALLOWED_APP_ORIGINS=https://app.example.com
+```
+
+Wildcards are intentionally rejected and credential cookies are never enabled for cross-origin requests.
+
+## Next phase
+
+The next Android phase will add the Capacitor project, secure credential storage, server onboarding screens, a local note database, queued offline mutations, conflict handling, and physical-device tests.

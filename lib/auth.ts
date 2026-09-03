@@ -1,11 +1,13 @@
 import 'server-only';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { createHash, randomBytes, randomUUID, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { getDb } from '@/lib/db';
+import { parseBearerAuthorization } from '@/lib/session-token';
 import type { User, UserRole } from '@/lib/types';
 
 const COOKIE_NAME = 'suur_session';
 const SESSION_DAYS = 30;
+const MOBILE_SESSION_DAYS = 90;
 
 interface UserRow {
   id: string;
@@ -22,6 +24,17 @@ interface UserRow {
 
 function tokenHash(token: string) {
   return createHash('sha256').update(token).digest('hex');
+}
+
+function createSessionRecord(userId: string, type: 'web' | 'mobile', lifetimeDays: number, deviceName: string | null) {
+  const token = randomBytes(32).toString('base64url');
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + lifetimeDays * 86_400_000);
+  getDb().prepare(`
+    INSERT INTO sessions (token_hash, user_id, expires_at, created_at, session_type, device_name)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(tokenHash(token), userId, expiresAt.toISOString(), createdAt.toISOString(), type, deviceName);
+  return { token, expiresAt: expiresAt.toISOString() };
 }
 
 export function hashPassword(password: string) {
@@ -69,31 +82,36 @@ export function findUserById(id: string) {
 }
 
 export async function createSession(userId: string) {
-  const token = randomBytes(32).toString('base64url');
-  const createdAt = new Date();
-  const expiresAt = new Date(createdAt.getTime() + SESSION_DAYS * 86_400_000);
-  getDb().prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(
-    tokenHash(token), userId, expiresAt.toISOString(), createdAt.toISOString(),
-  );
+  const { token, expiresAt } = createSessionRecord(userId, 'web', SESSION_DAYS, null);
   const publicUrl = process.env.SUUR_PUBLIC_URL || '';
   (await cookies()).set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'strict',
     secure: publicUrl.startsWith('https://'),
     path: '/',
-    expires: expiresAt,
+    expires: new Date(expiresAt),
   });
+}
+
+export function createMobileSession(userId: string, deviceName: string) {
+  return createSessionRecord(userId, 'mobile', MOBILE_SESSION_DAYS, deviceName);
 }
 
 export async function destroySession() {
   const store = await cookies();
-  const token = store.get(COOKIE_NAME)?.value;
-  if (token) getDb().prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash(token));
+  const cookieToken = store.get(COOKIE_NAME)?.value;
+  const bearerToken = parseBearerAuthorization((await headers()).get('authorization'));
+  for (const token of new Set([cookieToken, bearerToken].filter((value): value is string => Boolean(value)))) {
+    getDb().prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash(token));
+  }
   store.set(COOKIE_NAME, '', { httpOnly: true, sameSite: 'strict', path: '/', expires: new Date(0) });
 }
 
 export async function getCurrentUser() {
-  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  const authorization = (await headers()).get('authorization');
+  const token = authorization === null
+    ? (await cookies()).get(COOKIE_NAME)?.value
+    : parseBearerAuthorization(authorization);
   if (!token) return null;
   const row = getDb().prepare(`
     SELECT users.* FROM sessions
@@ -101,6 +119,46 @@ export async function getCurrentUser() {
     WHERE sessions.token_hash = ? AND sessions.expires_at > ?
   `).get(tokenHash(token), new Date().toISOString()) as UserRow | undefined;
   return row ? toUser(row) : null;
+}
+
+export function revokeSessionToken(token: string) {
+  return getDb().prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash(token)).changes > 0;
+}
+
+const globalLimiter = globalThis as unknown as { suurLoginAttempts?: Map<string, { count: number; resetAt: number }> };
+const loginAttempts = globalLimiter.suurLoginAttempts ?? new Map();
+globalLimiter.suurLoginAttempts = loginAttempts;
+const dummyPasswordHash = 'scrypt$16384$8$1$8cbb4e6c64380641afce209f81987bf9$9c23b68a76fc1922873c9f0a3b6b275a1ce02d3353a35a7a0bb88ac1c0cd3a7d870f24e7bd0ae9ae4e92768a44536ab1c739f36f86731323e0f65cf6c77dc282';
+
+export async function authenticateCredentials(request: Request, username: string, password: string): Promise<
+  { ok: true; user: User } | { ok: false; status: 401 | 429; message: string; code: 'INVALID_CREDENTIALS' | 'TOO_MANY_ATTEMPTS' }
+> {
+  const trustProxy = process.env.SUUR_TRUST_PROXY === 'true';
+  const forwarded = trustProxy
+    ? request.headers.get('cf-connecting-ip')
+      || request.headers.get('x-real-ip')
+      || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || 'proxy'
+    : 'all-clients';
+  const key = `${forwarded}:${username.toLocaleLowerCase('en-US')}`;
+  const current = loginAttempts.get(key);
+  const now = Date.now();
+  if (current && current.resetAt > now && current.count >= 5) {
+    return { ok: false, status: 429, message: 'Çok fazla başarısız deneme. 15 dakika sonra tekrar deneyin.', code: 'TOO_MANY_ATTEMPTS' };
+  }
+  if (current && current.resetAt <= now) loginAttempts.delete(key);
+
+  const row = findUserByUsername(username);
+  const passwordValid = await verifyPassword(password, row?.password_hash || dummyPasswordHash);
+  if (!row || !passwordValid) {
+    const next = loginAttempts.get(key) || { count: 0, resetAt: now + 15 * 60_000 };
+    next.count += 1;
+    loginAttempts.set(key, next);
+    return { ok: false, status: 401, message: 'Kullanıcı adı veya şifre hatalı.', code: 'INVALID_CREDENTIALS' };
+  }
+
+  loginAttempts.delete(key);
+  return { ok: true, user: toUser(row) };
 }
 
 export function createUser(input: { username: string; displayName: string; password: string; role: UserRole; storageQuotaMb: number }) {
