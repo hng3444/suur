@@ -403,12 +403,14 @@ export function NoteEditor({
               </div>
             </div></div>}
 
-            {activePanel === 'color' && <div className="editor-tool-panel"><div className="color-picker" aria-label={ui('Not rengi', 'Note color')}>
+            {activePanel === 'color' && <div className="editor-tool-panel"><div className="color-picker" role="radiogroup" aria-label={ui('Not rengi', 'Note color')}>
               {colors.map((color) => (
                 <button
                   key={color}
                   className={`color-dot note-${color} ${note.color === color ? 'selected' : ''}`}
                   onClick={() => onChange({ ...note, color })}
+                  role="radio"
+                  aria-checked={note.color === color}
                   title={t(`color.${color}` as Parameters<typeof translate>[1])}
                   aria-label={t(`color.${color}` as Parameters<typeof translate>[1])}
                 />

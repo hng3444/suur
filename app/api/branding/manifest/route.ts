@@ -20,8 +20,8 @@ export async function GET() {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    background_color: '#f7d2b7',
-    theme_color: '#f05a24',
+    background_color: '#eef2ff',
+    theme_color: '#3f5efb',
     icons,
   }, { headers: { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'no-store' } });
 }

@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
       enabled: true,
     },
     LocalNotifications: {
-      iconColor: '#f05a24',
+      iconColor: '#3f5efb',
     },
   },
   server: {
@@ -19,7 +19,7 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: '#f7d2b7',
+    backgroundColor: '#eef2ff',
   },
 };
 

@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: ['self-hosted notes', 'offline notes app', 'open source note taking', 'Docker notes app', 'CasaOS notes', 'Google Keep alternative', 'private notes', 'PWA notes'],
     applicationName: branding.appName,
     manifest: '/api/branding/manifest',
-    icons: { icon: [{ url: icon }], apple: [{ url: icon }] },
+    icons: { icon: [{ url: icon }], apple: [{ url: branding.hasCustomIcon ? icon : '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }] },
     appleWebApp: { capable: true, statusBarStyle: 'default', title: branding.appName },
     openGraph: { title: branding.appName, description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.', type: 'website', images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Suur self-hosted notes app' }] },
     twitter: { card: 'summary_large_image', title: branding.appName, description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.', images: ['/og.png'] },
@@ -28,7 +28,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#f05a24',
+  themeColor: '#3f5efb',
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

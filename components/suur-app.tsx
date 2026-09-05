@@ -31,6 +31,7 @@ import { NoteViewer } from '@/components/note-viewer';
 import { SettingsCenter } from '@/components/settings-center';
 import { ConfirmDialog, ShareDialog } from '@/components/app-dialogs';
 import { BrandMark } from '@/components/brand-mark';
+import { useWebBackLayer } from '@/components/use-web-back-layer';
 import { enqueue, getCache, queuedOperations, removeQueuedOperation, setCache, setOfflineNamespace, type QueuedOperation } from '@/lib/offline';
 import { languageDirection, translate } from '@/lib/i18n';
 import { hasActiveFilters, reconcileEditorSave, sortNotes } from '@/lib/client-utils';
@@ -623,6 +624,11 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
     }
     openEditor(draft);
   };
+
+  useWebBackLayer(settingsOpen, 10, () => { if (!currentUser.mustChangePassword) setSettingsOpen(false); });
+  useWebBackLayer(labelManagerOpen, 15, () => setLabelManagerOpen(false));
+  useWebBackLayer(viewerNote !== null, 20, () => setViewerNote(null));
+  useWebBackLayer(editorNote !== null, 30, closeEditor);
 
   const patchNote = async (note: Note, patch: Partial<Note>, remove = false) => {
     const optimistic = { ...note, ...patch, version: note.version + 1, updatedAt: new Date().toISOString() };

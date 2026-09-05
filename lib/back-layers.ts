@@ -32,7 +32,9 @@ export class BackLayers {
 
   back() {
     const top = [...this.layers.values()].sort((a, b) => b.priority - a.priority)[0];
-    top?.close();
+    if (!top) return false;
+    top.close();
+    return true;
   }
 
   popped() {

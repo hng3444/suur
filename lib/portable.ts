@@ -109,7 +109,7 @@ function normalizeImportedNotes(value: unknown): { labels: Label[]; notes: Note[
     return [{
       id: String(item.id || `label-${index}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || `label-${index}`,
       name,
-      color: typeof item.color === 'string' && /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#f05a24',
+      color: typeof item.color === 'string' && /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#3f5efb',
       createdAt: typeof item.createdAt === 'string' && Number.isFinite(Date.parse(item.createdAt)) ? item.createdAt : timestamp,
       updatedAt: typeof item.updatedAt === 'string' && Number.isFinite(Date.parse(item.updatedAt)) ? item.updatedAt : timestamp,
     }];
@@ -130,7 +130,7 @@ function normalizeImportedNotes(value: unknown): { labels: Label[]; notes: Note[
       items: Array.isArray(item.items) ? item.items.slice(0, 500).map((entry) => ({ id: randomUUID(), text: String(entry.text || '').slice(0, 10_000), checked: Boolean(entry.checked) })) : [],
       color, pinned: Boolean(item.pinned), archived: Boolean(item.archived), trashedAt: normalizedDate(item.trashedAt), reminderAt: normalizedDate(item.reminderAt),
       position: Number.isFinite(item.position) ? Number(item.position) : index * 1024, version: 1, createdAt, updatedAt,
-      labels: Array.isArray(item.labels) ? item.labels.flatMap((label) => label && typeof label === 'object' ? [{ id: String(label.id || '').slice(0, 80), name: String(label.name || '').slice(0, 80), color: '#f05a24', createdAt: now, updatedAt: now }] : []) : [], attachments: [],
+      labels: Array.isArray(item.labels) ? item.labels.flatMap((label) => label && typeof label === 'object' ? [{ id: String(label.id || '').slice(0, 80), name: String(label.name || '').slice(0, 80), color: '#3f5efb', createdAt: now, updatedAt: now }] : []) : [], attachments: [],
     } satisfies Note;
   });
   return { labels, notes };
@@ -142,7 +142,7 @@ function importNotes(data: { labels: Label[]; notes: Note[] }, userId: string) {
   for (const label of data.labels) {
     const key = label.name.toLocaleLowerCase();
     if (!labelByName.has(key)) {
-      const created = createLabel({ name: label.name.slice(0, 80), color: /^#[0-9a-f]{6}$/i.test(label.color) ? label.color : '#f05a24' }, userId);
+      const created = createLabel({ name: label.name.slice(0, 80), color: /^#[0-9a-f]{6}$/i.test(label.color) ? label.color : '#3f5efb' }, userId);
       if (created) labelByName.set(key, created);
     }
   }

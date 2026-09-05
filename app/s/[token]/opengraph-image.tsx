@@ -52,7 +52,7 @@ export default async function SharedNoteOpenGraphImage({ params }: { params: Pro
       <div style={{ width: '100%', height: '100%', display: 'flex', overflow: 'hidden', borderRadius: 34, background, boxShadow: '0 24px 70px rgba(0,0,0,.3)' }}>
         {image && <img src={image} alt="" width="650" height="562" style={{ width: 650, height: '100%', objectFit: 'cover' }} />}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: image ? '48px 52px' : '58px 68px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#c33f0f', fontSize: 25, fontWeight: 700 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#2948dc', fontSize: 25, fontWeight: 700 }}>
             <img src={brandIcon} alt="" width="34" height="34" style={{ width: 34, height: 34, borderRadius: 8 }} />
             {branding.appName}
           </div>

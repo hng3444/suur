@@ -38,3 +38,12 @@ test('failed saves keep the editor guarded and StrictMode does not duplicate his
   await Promise.resolve();
   assert.equal(backs, 1);
 });
+
+test('native Back reports whether an in-app surface consumed the event', async () => {
+  const layers = new BackLayers({ push() {}, back() {} });
+  assert.equal(layers.back(), false);
+  let closed = false;
+  layers.add(20, () => { closed = true; });
+  assert.equal(layers.back(), true);
+  assert.equal(closed, true);
+});
