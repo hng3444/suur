@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, LockKeyhole, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { languages, normalizeLocale, translate } from '@/lib/i18n';
 import type { Locale } from '@/lib/types';
 import type { BrandingSettings } from '@/lib/types';
@@ -61,14 +61,13 @@ export function LoginForm({ branding }: { branding: BrandingSettings }) {
         </header>
 
         <section className="login-card">
-          <div className="login-copy"><h1>{t('login.title')}</h1><p>{t('login.description')}</p></div>
+          <div className="login-copy"><h1>{t('login.title')}</h1></div>
           <form onSubmit={submit}>
             <label>{t('login.username')}<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required autoFocus /></label>
             <label>{t('login.password')}<span className="password-field"><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
             {error && <p className="login-error" role="alert">{error}</p>}
             <button className="login-submit" disabled={loading}>{loading ? t('login.loading') : <>{t('login.action')} <LogIn size={18} /></>}</button>
           </form>
-          <p className="login-footnote"><LockKeyhole size={12} /> {t('login.private')}</p>
         </section>
       </section>
     </main>

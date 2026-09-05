@@ -8,7 +8,7 @@ const publicUrl = process.env.SUUR_PUBLIC_URL || 'http://localhost:3000';
 
 export async function generateMetadata(): Promise<Metadata> {
   const branding = getBranding();
-  const icon = branding.hasCustomIcon ? `/api/branding/icon?v=${encodeURIComponent(branding.iconVersion)}` : '/suur.svg';
+  const icon = branding.hasCustomIcon ? `/api/branding/icon?v=${encodeURIComponent(branding.iconVersion)}` : '/suuricon.png';
   return {
     metadataBase: new URL(publicUrl),
     title: branding.appName,
@@ -28,7 +28,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#198754',
+  themeColor: '#f05a24',
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -2,7 +2,17 @@ import { compactOperations } from './offline.ts';
 import { createEmptyMobileState, type MobileLocalState, type MobilePendingOperation, type MobileSyncStore } from './mobile-sync.ts';
 import type { AppSettings, Label, Note } from './types.ts';
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
+
+export interface CachedMobileAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  blob: Blob;
+  cachedAt: string;
+}
+
+export interface MobileEditorDraft { note: Note; original: Note; isNew: boolean }
 
 function safeNamespace(value: string) {
   const cleaned = value.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
@@ -42,6 +52,7 @@ export class IndexedDbMobileSyncStore implements MobileSyncStore {
         if (!database.objectStoreNames.contains('labels')) database.createObjectStore('labels', { keyPath: 'id' });
         if (!database.objectStoreNames.contains('meta')) database.createObjectStore('meta');
         if (!database.objectStoreNames.contains('queue')) database.createObjectStore('queue', { keyPath: 'id' });
+        if (!database.objectStoreNames.contains('attachments')) database.createObjectStore('attachments', { keyPath: 'id' });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -152,10 +163,108 @@ export class IndexedDbMobileSyncStore implements MobileSyncStore {
     }
   }
 
+  /**
+   * Persists the optimistic screen state and its outbound operation in one
+   * IndexedDB transaction. A process kill can therefore never leave a visible
+   * local edit without the queue entry required to upload it later.
+   */
+  async writeStateAndEnqueue(state: MobileLocalState, operation: MobilePendingOperation) {
+    return this.writeStateAndEnqueueMany(state, [operation]);
+  }
+
+  async writeStateAndEnqueueMany(state: MobileLocalState, pendingOperations: MobilePendingOperation[]) {
+    if (state.serverId !== this.serverId || state.userId !== this.userId) throw new Error('OFFLINE_IDENTITY_MISMATCH');
+    const database = await this.open();
+    try {
+      const transaction = database.transaction(['notes', 'labels', 'meta', 'queue'], 'readwrite');
+      const done = transactionDone(transaction);
+      const notes = transaction.objectStore('notes');
+      const labels = transaction.objectStore('labels');
+      notes.clear();
+      labels.clear();
+      for (const note of state.notes) notes.put(note);
+      for (const label of state.labels) labels.put(label);
+      const meta = transaction.objectStore('meta');
+      meta.put(state.serverId, 'serverId');
+      meta.put(state.userId, 'userId');
+      meta.put(state.cursor, 'cursor');
+      meta.put(state.settings, 'settings');
+
+      const queue = transaction.objectStore('queue');
+      const operations = await requestResult(queue.getAll() as IDBRequest<MobilePendingOperation[]>);
+      queue.clear();
+      for (const item of compactOperations([...operations, ...pendingOperations])) queue.put(item);
+      await done;
+    } finally {
+      database.close();
+    }
+  }
+
   async initialize() {
     const state = await this.readState();
     if (state.cursor === null && !state.notes.length && !state.labels.length && !state.settings) {
       await this.writeState(createEmptyMobileState(this.serverId, this.userId));
+    }
+  }
+
+  async readAttachment(id: string) {
+    const database = await this.open();
+    try {
+      const transaction = database.transaction('attachments', 'readonly');
+      const done = transactionDone(transaction);
+      const value = await requestResult(
+        transaction.objectStore('attachments').get(id) as IDBRequest<CachedMobileAttachment | undefined>,
+      );
+      await done;
+      return value || null;
+    } finally {
+      database.close();
+    }
+  }
+
+  async readEditorDraft(): Promise<MobileEditorDraft | null> {
+    const database = await this.open();
+    try {
+      const transaction = database.transaction('meta', 'readonly');
+      const done = transactionDone(transaction);
+      const draft = await requestResult(transaction.objectStore('meta').get('editorDraft'));
+      await done;
+      return draft || null;
+    } finally { database.close(); }
+  }
+
+  async writeEditorDraft(draft: MobileEditorDraft | null) {
+    const database = await this.open();
+    try {
+      const transaction = database.transaction('meta', 'readwrite');
+      const done = transactionDone(transaction);
+      if (draft) transaction.objectStore('meta').put(draft, 'editorDraft');
+      else transaction.objectStore('meta').delete('editorDraft');
+      await done;
+    } finally { database.close(); }
+  }
+
+  async writeAttachment(attachment: CachedMobileAttachment) {
+    const database = await this.open();
+    try {
+      const transaction = database.transaction('attachments', 'readwrite');
+      const done = transactionDone(transaction);
+      transaction.objectStore('attachments').put(attachment);
+      await done;
+    } finally {
+      database.close();
+    }
+  }
+
+  async deleteAttachment(id: string) {
+    const database = await this.open();
+    try {
+      const transaction = database.transaction('attachments', 'readwrite');
+      const done = transactionDone(transaction);
+      transaction.objectStore('attachments').delete(id);
+      await done;
+    } finally {
+      database.close();
     }
   }
 

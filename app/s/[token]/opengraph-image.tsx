@@ -45,14 +45,15 @@ export default async function SharedNoteOpenGraphImage({ params }: { params: Pro
   const firstImage = note.attachments.find((attachment) => attachment.mimeType.startsWith('image/'));
   const image = firstImage ? await previewImage(token, firstImage.id, firstImage.mimeType, firstImage.size) : null;
   const background = noteBackgrounds[note.color] || noteBackgrounds.default;
+  const brandIcon = `data:image/png;base64,${(await readFile(path.join(process.cwd(), 'public', 'suuricon.png'))).toString('base64')}`;
 
   return new ImageResponse(
     <div style={{ width: '100%', height: '100%', display: 'flex', background: '#101312', color: '#172019', fontFamily: 'Arial, sans-serif', padding: 34 }}>
       <div style={{ width: '100%', height: '100%', display: 'flex', overflow: 'hidden', borderRadius: 34, background, boxShadow: '0 24px 70px rgba(0,0,0,.3)' }}>
         {image && <img src={image} alt="" width="650" height="562" style={{ width: 650, height: '100%', objectFit: 'cover' }} />}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: image ? '48px 52px' : '58px 68px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#198754', fontSize: 25, fontWeight: 700 }}>
-            <span style={{ width: 22, height: 22, display: 'flex', borderRadius: 7, background: '#198754' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, color: '#c33f0f', fontSize: 25, fontWeight: 700 }}>
+            <img src={brandIcon} alt="" width="34" height="34" style={{ width: 34, height: 34, borderRadius: 8 }} />
             {branding.appName}
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>

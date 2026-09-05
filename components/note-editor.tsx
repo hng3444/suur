@@ -93,6 +93,7 @@ export function NoteEditor({
   onDeleteAttachment,
 }: NoteEditorProps) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const moreToolsRef = useRef<HTMLDivElement>(null);
   const itemInputs = useRef(new Map<string, HTMLInputElement>());
   const pendingItemFocus = useRef<string | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -129,6 +130,20 @@ export function NoteEditor({
     const timer = window.setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1_000);
     return () => window.clearInterval(timer);
   }, [recording]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (moreToolsRef.current?.contains(target) || target.closest('.editor-more-toggle')) return;
+      // Consume the same click before it reaches the underlying control.
+      event.preventDefault();
+      event.stopPropagation();
+      setMoreOpen(false);
+    };
+    document.addEventListener('click', closeOnOutsideClick, true);
+    return () => document.removeEventListener('click', closeOnOutsideClick, true);
+  }, [moreOpen]);
 
   const updateItem = (id: string, patch: Partial<ChecklistItem>) => {
     const items = note.items.map((item) => item.id === id ? { ...item, ...patch } : item);
@@ -178,6 +193,7 @@ export function NoteEditor({
 
   const toggleVoice = async () => {
     if (recording) { recorder.current?.stop(); return; }
+    if (voiceState === 'requesting' || voiceState === 'processing') return;
     if (offline) { setVoiceState('error'); setVoiceMessage(ui('Sesli not eklemek için sunucu bağlantısı gerekiyor.', 'A server connection is required to attach a voice note.')); return; }
     if (!window.isSecureContext) { setVoiceState('error'); setVoiceMessage(ui('Mikrofon için HTTPS bağlantısı gerekiyor.', 'A secure HTTPS connection is required for microphone access.')); return; }
     if (!navigator.mediaDevices?.getUserMedia || !('MediaRecorder' in window)) { setVoiceState('error'); setVoiceMessage(ui('Bu tarayıcı ses kaydını desteklemiyor.', 'This browser does not support audio recording.')); return; }
@@ -204,6 +220,11 @@ export function NoteEditor({
     recorder.current = mediaRecorder;
     mediaRecorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
     mediaRecorder.onerror = () => {
+      mediaRecorder.onstop = null;
+      stream.getTracks().forEach((track) => track.stop());
+      voiceStream.current = null;
+      recorder.current = null;
+      setRecording(false);
       setVoiceState('error');
       setVoiceMessage(ui('Ses kaydı tamamlanamadı.', 'The audio recording could not be completed.'));
     };
@@ -222,11 +243,24 @@ export function NoteEditor({
         setVoiceMessage(ui('Ses kaydı boş kaldı. Yeniden deneyin.', 'The audio recording was empty. Please try again.'));
         return;
       }
-      const uploaded = await onUpload(file);
-      setVoiceState(uploaded ? 'success' : 'error');
-      setVoiceMessage(uploaded ? ui('Sesli not eklendi.', 'Voice note added.') : ui('Sesli not yüklenemedi.', 'The voice note could not be uploaded.'));
+      try {
+        const uploaded = await onUpload(file);
+        setVoiceState(uploaded ? 'success' : 'error');
+        setVoiceMessage(uploaded ? ui('Sesli not eklendi.', 'Voice note added.') : ui('Sesli not yüklenemedi.', 'The voice note could not be uploaded.'));
+      } catch {
+        setVoiceState('error');
+        setVoiceMessage(ui('Sesli not yüklenemedi. Bağlantıyı kontrol edip yeniden deneyin.', 'The voice note could not be uploaded. Check the connection and try again.'));
+      }
     };
-    mediaRecorder.start(1_000);
+    try { mediaRecorder.start(1_000); }
+    catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      voiceStream.current = null;
+      recorder.current = null;
+      setVoiceState('error');
+      setVoiceMessage(microphoneError(error));
+      return;
+    }
     setRecordingSeconds(0);
     setRecording(true);
     setVoiceState('recording');
@@ -315,6 +349,7 @@ export function NoteEditor({
                   value={item.text}
                   onChange={(event) => updateItem(item.id, { text: event.target.value })}
                   onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing) return;
                     if (event.key === 'Enter') {
                       event.preventDefault();
                       addItem(item.id);
@@ -391,7 +426,7 @@ export function NoteEditor({
                 <button className={`toolbar-button ${activePanel === 'reminder' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'reminder' ? null : 'reminder')} aria-label={t('editor.reminder')} title={t('editor.reminder')}><Bell size={18} /></button>
                 <button className="toolbar-button" disabled={offline} onClick={() => fileInput.current?.click()} aria-label={t('editor.attachment')} title={offline ? ui('Çevrimdışıyken dosya eklenemez', 'Attachments are unavailable offline') : t('editor.attachment')}><Paperclip size={18} /><span className="tool-label">{ui('Dosya', 'File')}</span></button>
                 <input ref={fileInput} hidden multiple type="file" accept="image/*,audio/*,application/pdf,text/plain,text/markdown,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />
-                <div className={`editor-more-tools ${moreOpen ? 'open' : ''}`} onClick={() => setMoreOpen(false)}>
+                <div ref={moreToolsRef} className={`editor-more-tools ${moreOpen ? 'open' : ''}`}>
                   <button className={`toolbar-button ${activePanel === 'assignee' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'assignee' ? null : 'assignee')} aria-label={t('editor.assignee')} title={t('editor.assignee')}><UserRound size={18} /><span className="more-tool-label">{t('editor.assignee')}</span></button>
                   <button className={`toolbar-button ${activePanel === 'labels' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'labels' ? null : 'labels')} aria-label={t('editor.labels')} title={t('editor.labels')}><Tag size={18} /><span className="more-tool-label">{t('editor.labels')}</span></button>
                   <button className={`toolbar-button ${activePanel === 'color' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'color' ? null : 'color')} aria-label={t('editor.color')} title={t('editor.color')}><Palette size={18} /><span className="more-tool-label">{t('editor.color')}</span></button>

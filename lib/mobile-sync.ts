@@ -105,7 +105,9 @@ async function pullPage(input: {
   fetcher: typeof fetch;
 }) {
   const suffix = input.cursor === null ? '' : `?cursor=${encodeURIComponent(String(input.cursor))}`;
-  const response = await input.fetcher(mobileEndpoint(input.baseUrl, `/api/mobile/sync${suffix}`), {
+  // Browser fetch must not receive the options object as its `this` receiver.
+  const { fetcher } = input;
+  const response = await fetcher(mobileEndpoint(input.baseUrl, `/api/mobile/sync${suffix}`), {
     method: 'GET',
     headers: { Accept: 'application/json', ...mobileAuthorization(input.token) },
     cache: 'no-store',

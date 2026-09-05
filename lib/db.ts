@@ -98,7 +98,7 @@ function migrateLabelUniqueness(database: Database.Database) {
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         name TEXT NOT NULL COLLATE NOCASE,
-        color TEXT NOT NULL DEFAULT '#198754',
+        color TEXT NOT NULL DEFAULT '#f05a24',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE (user_id, name)
@@ -188,7 +188,7 @@ function initializeDatabase() {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL COLLATE NOCASE,
-      color TEXT NOT NULL DEFAULT '#198754',
+      color TEXT NOT NULL DEFAULT '#f05a24',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       UNIQUE (user_id, name)

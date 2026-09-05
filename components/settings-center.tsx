@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppWindow, BellRing, Camera, Check, DatabaseBackup, Download, FileArchive, FileJson, FileText, HardDriveDownload, Info, Languages, LogOut, Monitor, Moon, Plus, RotateCcw, Shield, SlidersHorizontal, Sun, Trash2, Upload, UserRound, Users, X } from 'lucide-react';
+import { version } from '../package.json';
+import { AppWindow, ArrowLeft, BellRing, Camera, Check, DatabaseBackup, Download, FileArchive, FileJson, FileText, HardDriveDownload, Info, Languages, LogOut, Monitor, Moon, Plus, RotateCcw, Shield, SlidersHorizontal, Sun, Trash2, Upload, UserRound, Users, X } from 'lucide-react';
 import { clearOfflineData } from '@/lib/offline';
 import { ConfirmDialog } from '@/components/app-dialogs';
 import { BrandMark } from '@/components/brand-mark';
 import { languages, translate } from '@/lib/i18n';
 import type { AppSettings, BrandingSettings, User, UserRole } from '@/lib/types';
 
-type SettingsTab = 'appearance' | 'profile' | 'users' | 'data' | 'advanced' | 'about';
+type SettingsTab = 'notifications' | 'appearance' | 'profile' | 'users' | 'data' | 'advanced' | 'about';
 
 interface SettingsCenterProps {
   currentUser: User;
@@ -25,6 +26,8 @@ interface SettingsCenterProps {
 export function SettingsCenter({ currentUser, settings, branding, onClose, onSettingsChange, onUserChange, onBrandingChange, onImportComplete }: SettingsCenterProps) {
   const router = useRouter();
   const [tab, setTab] = useState<SettingsTab>(currentUser.mustChangePassword ? 'profile' : 'appearance');
+  const [mobileDetail, setMobileDetail] = useState(currentUser.mustChangePassword);
+  const chooseTab = (next: SettingsTab) => { setTab(next); setMobileDetail(true); };
   const [displayName, setDisplayName] = useState(currentUser.displayName);
   const [username, setUsername] = useState(currentUser.username);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -232,16 +235,17 @@ export function SettingsCenter({ currentUser, settings, branding, onClose, onSet
 
   return (
     <div className="dialog-backdrop settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !currentUser.mustChangePassword) onClose(); }}>
-      <section className="settings-center" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <header className="settings-header"><div><span className="editor-kicker">{branding.appName.toLocaleUpperCase(settings.locale)}</span><h2 id="settings-title">{ui('Ayarlar', 'Settings')}</h2></div>{!currentUser.mustChangePassword && <button className="toolbar-button" onClick={onClose} aria-label={ui('Ayarları kapat', 'Close settings')}><X size={20} /></button>}</header>
+      <section className={`settings-center ${mobileDetail ? 'settings-detail' : 'settings-overview'}`} role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <header className="settings-header"><div className="settings-heading">{!currentUser.mustChangePassword && <button className="toolbar-button settings-back" onClick={() => setMobileDetail(false)} aria-label={t('nav.settings')}><ArrowLeft size={20} /></button>}<h2 id="settings-title"><span className="settings-title-root">{t('nav.settings')}</span><span className="settings-title-detail">{tab === 'notifications' ? ui('Bildirimler', 'Notifications') : t(`settings.${tab}` as Parameters<typeof translate>[1])}</span></h2></div>{!currentUser.mustChangePassword && <button className="toolbar-button" onClick={onClose} aria-label={ui('Ayarları kapat', 'Close settings')}><X size={20} /></button>}</header>
         <div className="settings-layout">
-          <nav className="settings-nav" aria-label={ui('Ayar kategorileri', 'Settings categories')}>
-            {!currentUser.mustChangePassword && <button className={tab === 'appearance' ? 'active' : ''} onClick={() => setTab('appearance')}><Monitor size={18} /><span>{ui('Görünüm', 'Appearance')}</span></button>}
-            <button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserRound size={18} /><span>{t('settings.profile')}</span></button>
-            {!currentUser.mustChangePassword && currentUser.role === 'superadmin' && <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}><Users size={18} /><span>{t('settings.users')}</span></button>}
-            {!currentUser.mustChangePassword && <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')}><DatabaseBackup size={18} /><span>{t('settings.data')}</span></button>}
-            {!currentUser.mustChangePassword && <button className={tab === 'advanced' ? 'active' : ''} onClick={() => setTab('advanced')}><SlidersHorizontal size={18} /><span>{t('settings.advanced')}</span></button>}
-            {!currentUser.mustChangePassword && <button className={tab === 'about' ? 'active' : ''} onClick={() => setTab('about')}><Info size={18} /><span>{t('settings.about')}</span></button>}
+          <nav className="settings-nav" aria-label={t('nav.settings')}><div className="settings-account-summary">{avatar(currentUser)}<span><strong>{currentUser.displayName}</strong><small>@{currentUser.username}</small></span></div>
+            {!currentUser.mustChangePassword && <button className={tab === 'appearance' ? 'active' : ''} onClick={() => chooseTab('appearance')}><Monitor size={18} /><span>{t('settings.appearance')}</span></button>}
+            <button className={tab === 'profile' ? 'active' : ''} onClick={() => chooseTab('profile')}><UserRound size={18} /><span>{t('settings.profile')}</span></button>
+            {!currentUser.mustChangePassword && currentUser.role === 'superadmin' && <button className={tab === 'users' ? 'active' : ''} onClick={() => chooseTab('users')}><Users size={18} /><span>{t('settings.users')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'data' ? 'active' : ''} onClick={() => chooseTab('data')}><DatabaseBackup size={18} /><span>{t('settings.data')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'notifications' ? 'active' : ''} onClick={() => chooseTab('notifications')}><BellRing size={18} /><span>{ui('Bildirimler', 'Notifications')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'advanced' ? 'active' : ''} onClick={() => chooseTab('advanced')}><SlidersHorizontal size={18} /><span>{t('settings.advanced')}</span></button>}
+            {!currentUser.mustChangePassword && <button className={tab === 'about' ? 'active' : ''} onClick={() => chooseTab('about')}><Info size={18} /><span>{t('settings.about')}</span></button>}
             <button className="logout-nav" onClick={() => void signOut()}><LogOut size={18} /><span>{t('settings.signOut')}</span></button>
           </nav>
 
@@ -281,9 +285,9 @@ export function SettingsCenter({ currentUser, settings, branding, onClose, onSet
               {importResult && <p className="import-result" role="status">{importResult}</p>}
             </section>}
 
+            {tab === 'notifications' && <section className="settings-panel"><h3>{ui('Bildirimler', 'Notifications')}</h3><div className="setting-row"><div><strong><BellRing size={16} /> {ui('Tarayıcı bildirimleri', 'Browser notifications')}</strong><span>{ui('Hatırlatıcı zamanı geldiğinde haber ver', 'Notify when a reminder is due')}</span></div><button className={`toggle-switch ${settings.notificationsEnabled ? 'selected' : ''}`} role="switch" aria-checked={settings.notificationsEnabled} onClick={() => void toggleNotifications()}><span /></button></div></section>}
             {tab === 'advanced' && <section className="settings-panel"><h3>{t('settings.advanced')}</h3><p>{ui('Bildirim, otomasyon ve sunucuya özel seçenekleri tek yerde yönet.', 'Manage notifications, automation, and server-specific options in one place.')}</p>
               <h4 className="settings-section-title">{ui('Not davranışı', 'Note behavior')}</h4>
-              <div className="setting-row"><div><strong><BellRing size={16} /> {ui('Tarayıcı bildirimleri', 'Browser notifications')}</strong><span>{ui('Hatırlatıcı zamanı geldiğinde haber ver', 'Notify when a reminder is due')}</span></div><button className={`toggle-switch ${settings.notificationsEnabled ? 'selected' : ''}`} role="switch" aria-checked={settings.notificationsEnabled} onClick={() => void toggleNotifications()}><span /></button></div>
               <div className="setting-row"><div><strong>{ui('Tamamlanan checklist öğeleri', 'Completed checklist items')}</strong><span>{ui('Tamamlanınca otomatik olarak alta taşı', 'Move completed items to the bottom')}</span></div><button className={`toggle-switch ${settings.completedItemsBottom ? 'selected' : ''}`} role="switch" aria-checked={settings.completedItemsBottom} onClick={() => void onSettingsChange({ completedItemsBottom: !settings.completedItemsBottom })}><span /></button></div>
               <h4 className="settings-section-title">{ui('Sunucu bakımı', 'Server maintenance')}</h4>
               <div className="setting-row"><div><strong>{ui('Otomatik yedekleme', 'Automatic backup')}</strong><span>{ui('Uygulama kapalı olsa da sunucuda günlük veya haftalık çalışır', 'Runs daily or weekly on the server, even while the app is closed')}</span></div><select value={settings.backupFrequency} onChange={(event) => void onSettingsChange({ backupFrequency: event.target.value as AppSettings['backupFrequency'] })}><option value="off">{ui('Kapalı', 'Off')}</option><option value="daily">{ui('Her gün', 'Daily')}</option><option value="weekly">{ui('Her hafta', 'Weekly')}</option></select></div>
@@ -302,7 +306,7 @@ export function SettingsCenter({ currentUser, settings, branding, onClose, onSet
             {tab === 'about' && <section className="settings-panel about-panel"><h3>{t('settings.about')}</h3><p>{ui('Uygulamanın değiştirilemeyen özgün kimliği ve iletişim bilgileri.', 'The application’s immutable original identity and contact details.')}</p>
               <div className="about-brand"><BrandMark branding={branding} original /><div><span>{t('about.original')}</span><strong>Suur</strong><small>Private, self-hosted notes</small></div></div>
               <p className="about-attribution">{t('about.attribution')}</p>
-              <dl className="about-details"><div><dt>{t('about.version')}</dt><dd>0.3.0</dd></div><div><dt>{t('about.contact')}</dt><dd><a href="mailto:hng3444@gmail.com">hng3444@gmail.com</a></dd></div><div><dt>{t('about.source')}</dt><dd><a href="https://github.com/hng3444/suur" target="_blank" rel="noreferrer">github.com/hng3444/suur</a></dd></div><div><dt>{t('about.license')}</dt><dd>Open source</dd></div><div><dt>{t('about.storage')}</dt><dd>{t('about.storageValue')}</dd></div></dl>
+              <dl className="about-details"><div><dt>{t('about.version')}</dt><dd>{version}</dd></div><div><dt>{t('about.contact')}</dt><dd><a href="mailto:hng3444@gmail.com">hng3444@gmail.com</a></dd></div><div><dt>{t('about.source')}</dt><dd><a href="https://github.com/hng3444/suur" target="_blank" rel="noreferrer">github.com/hng3444/suur</a></dd></div><div><dt>{t('about.license')}</dt><dd>Open source</dd></div><div><dt>{t('about.storage')}</dt><dd>{t('about.storageValue')}</dd></div></dl>
               <p className="about-note">{ui('Superadmin uygulamanın görünen adını ve simgesini değiştirebilir; bu bölümdeki orijinal Suur bilgisi değişmez.', 'A superadmin may change the displayed app name and icon; the original Suur identity in this section never changes.')}</p>
             </section>}
           </div>

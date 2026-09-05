@@ -12,12 +12,14 @@ export interface MobileServerInfo {
   requiresHttps: boolean;
 }
 
+import type { User } from './types.ts';
+
 export interface MobileSessionResponse {
   token: string;
   tokenType: 'Bearer';
   expiresAt: string;
   apiVersion: number;
-  user: { id: string; username: string; displayName: string; mustChangePassword: boolean };
+  user: User;
 }
 
 export function normalizeServerUrl(input: string, options: { allowInsecure?: boolean } = {}) {
@@ -87,4 +89,41 @@ export async function createRemoteMobileSession(input: {
 export function mobileAuthorization(token: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new Error('INVALID_SESSION_TOKEN');
   return { Authorization: `Bearer ${token}` };
+}
+
+export async function mobileRequest(
+  serverUrl: string,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+) {
+  const headers = new Headers(init.headers);
+  headers.set('Accept', headers.get('Accept') || 'application/json');
+  for (const [key, value] of Object.entries(mobileAuthorization(token))) headers.set(key, value);
+  return fetch(mobileEndpoint(serverUrl, path), {
+    ...init,
+    headers,
+    credentials: 'omit',
+    redirect: 'manual',
+  });
+}
+
+export async function mobileJson<T>(
+  serverUrl: string,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+) {
+  const response = await mobileRequest(serverUrl, token, path, init);
+  const body = await response.json().catch(() => null) as ({ error?: string; code?: string } & T) | null;
+  if (!response.ok || !body) throw new Error(body?.code || body?.error || `HTTP_${response.status}`);
+  return body;
+}
+
+export function jsonRequest(method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  };
 }

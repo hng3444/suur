@@ -16,7 +16,38 @@ function inline(value: string): ReactNode[] {
 
 export function MarkdownView({ value }: { value: string }) {
   const lines = value.split(/\r?\n/);
-  return <div className="markdown-view">{lines.map((line, index) => {
+  const blocks: ReactNode[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith('```')) {
+      const start = index;
+      const code: string[] = [];
+      while (++index < lines.length && !lines[index].startsWith('```')) code.push(lines[index]);
+      blocks.push(<pre key={start}><code>{code.join('\n')}</code></pre>);
+      continue;
+    }
+    const ordered = /^\s*\d+[.)]\s+/.test(line);
+    const unordered = /^\s*[-*]\s+(?!\[[ xX]\])/.test(line);
+    if (ordered || unordered) {
+      const start = index;
+      const pattern = ordered ? /^\s*\d+[.)]\s+(.+)$/ : /^\s*[-*]\s+(?!\[[ xX]\])(.+)$/;
+      const items: ReactNode[] = [];
+      while (index < lines.length) {
+        const match = lines[index].match(pattern);
+        if (!match) break;
+        items.push(<li key={index}>{inline(match[1])}</li>);
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(ordered ? <ol key={start} start={Number(line.trim().match(/^\d+/)?.[0]) || 1}>{items}</ol> : <ul key={start}>{items}</ul>);
+      continue;
+    }
+    blocks.push(renderLine(line, index));
+  }
+  return <div className="markdown-view">{blocks}</div>;
+}
+
+function renderLine(line: string, index: number) {
     if (!line.trim()) return <br key={index} />;
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
@@ -31,5 +62,4 @@ export function MarkdownView({ value }: { value: string }) {
     if (list) return <p className="markdown-list" key={index}>• {inline(list[1])}</p>;
     if (line.startsWith('> ')) return <blockquote key={index}>{inline(line.slice(2))}</blockquote>;
     return <p key={index}>{inline(line)}</p>;
-  })}</div>;
 }

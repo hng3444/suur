@@ -35,6 +35,15 @@ yarn-error.log*
 next-env.d.ts
 *.tsbuildinfo
 /dist/
+/mobile-dist/
+/android/.gradle/
+/android/.idea/
+/android/build/
+/android/app/build/
+/android/local.properties
+*.jks
+*.keystore
+/android/keystore.properties
 /.wrangler/
 /outputs/
 /work/

@@ -1,9 +1,9 @@
-const STATIC_CACHE = 'suur-static-v6';
+const STATIC_CACHE = 'suur-static-v7';
 const PRIVATE_CACHE_PREFIX = 'suur-private-v2-';
 const PRIVATE_META_CACHE = 'suur-private-meta-v2';
 const PRIVATE_META_KEY = '/__suur_private_user__';
 const OFFLINE_SHELL = '/__suur_offline_shell__';
-const APP_SHELL = ['/offline.html', '/manifest.webmanifest', '/suur.svg', '/icon-192.png', '/icon-512.png'];
+const APP_SHELL = ['/offline.html', '/manifest.webmanifest', '/suuricon.png', '/icon-192.png', '/icon-512.png'];
 
 function safeUserId(value) {
   return typeof value === 'string' ? value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) : '';

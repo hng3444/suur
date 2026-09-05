@@ -38,6 +38,19 @@ class MemoryStore {
   async writeQueue(value) { this.queue = structuredClone(value); }
 }
 
+test('snapshot requests do not bind browser fetch to a configuration object', async () => {
+  const store = new MemoryStore(createEmptyMobileState('server-1', 'user-1'));
+  const result = await runMobileSync({
+    serverUrl: 'https://notes.example.com', token: 'a'.repeat(43), store,
+    fetcher: function () {
+      assert.equal(this, undefined, 'Browser fetch throws Illegal invocation with an object receiver');
+      return Promise.resolve(Response.json(snapshot([note('browser-note')])));
+    },
+  });
+  assert.equal(result.online, true);
+  assert.equal(result.state.notes[0].id, 'browser-note');
+});
+
 test('mobile snapshots replace local data only for the expected server and user', () => {
   const state = createEmptyMobileState('server-1', 'user-1');
   const next = applyMobileSnapshot(state, snapshot([note('n1')]));

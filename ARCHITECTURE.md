@@ -29,6 +29,12 @@ components/
   note-editor.tsx         autosaving editor, attachments, audio, Markdown
   note-viewer.tsx         read mode, history, sharing, duplication
   calendar-view.tsx       reminder calendar
+mobile/
+  src/mobile-app.tsx      bundled Android application shell and state
+  src/note-surfaces.tsx   mobile cards, viewer, editor, and attachments
+  src/app-surfaces.tsx    drawer, search, calendar, labels, and settings
+  src/native-capabilities.ts Android notifications, files, and sharing
+android/                  generated Capacitor Android Studio project
 lib/
   auth.ts                 scrypt passwords and session management
   cors.ts                 exact native-app origin allowlist
@@ -70,7 +76,7 @@ The service worker caches a successful authenticated navigation under a private 
 
 Offline create, patch, reorder, and delete operations receive unique mutation IDs. The server records processed IDs for 30 days, making reconnect retries idempotent. Note updates include a base version. If another device changed the same note, Suur creates a conflict copy instead of silently overwriting client content.
 
-Mobile API version 2 adds a consistent initial snapshot and an incremental cursor feed at `/api/mobile/sync`. SQLite keeps one current change marker per user and entity, including deletion tombstones. The mobile store separates data by stable server ID and user ID; bearer credentials are intentionally stored outside that database.
+Mobile API version 2 adds a consistent initial snapshot and an incremental cursor feed at `/api/mobile/sync`. SQLite keeps one current change marker per user and entity, including deletion tombstones. The mobile store separates data by stable server ID and user ID, caches attachment bytes after first viewing, and keeps bearer credentials outside that database in Android Keystore-backed encrypted storage.
 
 Signing out deletes the private service-worker cache and the current user's IndexedDB database from that browser.
 

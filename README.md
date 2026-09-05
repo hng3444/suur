@@ -4,7 +4,7 @@ Suur is an offline-first, self-hosted note-taking app inspired by the simplicity
 
 It runs as a single Docker container, stores persistent data in SQLite under `/data`, installs as a PWA, and keeps text and checklist edits available when the network drops.
 
-**Current release:** `v0.3.0`
+**Current release:** `v0.3.1`
 
 **Keywords:** self-hosted notes, offline-first notes app, private Google Keep alternative, Docker note-taking app, CasaOS notes, SQLite PWA.
 
@@ -202,7 +202,7 @@ ghcr.io/hng3444/suur:latest
 Current release:
 
 ```text
-ghcr.io/hng3444/suur:v0.3.0
+ghcr.io/hng3444/suur:v0.3.1
 ```
 
 ### Minimal Compose example
@@ -356,11 +356,22 @@ An internet connection is still required for:
 
 ---
 
-## PWA and Android client foundation
+## PWA and Android client
 
-Suur can be installed as a Progressive Web App on supported desktop and mobile browsers.
+Suur can be installed as a Progressive Web App on supported desktop and mobile browsers. A dedicated Android client is also included in this repository.
 
-Version 0.3.0 completes the offline storage and synchronization foundation for a proper Capacitor client that can connect to any compatible self-hosted Suur instance. It includes server discovery, API capability negotiation, revocable 256-bit bearer sessions, a per-server and per-user local database, a durable mutation queue, incremental cursor synchronization, deletion tombstones, and conflict copies. The native Android shell and first debug APK are the next development phase.
+The Capacitor client connects to any compatible self-hosted Suur instance and provides a bundled, touch-first interface rather than displaying the remote website. It includes server discovery, revocable bearer sessions protected by Android Keystore, per-server and per-user offline storage, a durable mutation queue, attachment caching, local reminder notifications, incremental synchronization, deletion tombstones, and conflict copies.
+
+The mobile interface supports notes and checklists, read/edit modes, search and filters, labels and colors, reminders and calendar, images/files/audio, multi-select actions, sharing, note history, profile and appearance settings, imports/exports/backups, and superadmin controls. Operations that inherently require the server—such as uploads, public links, imports, exports, history restore, and administration—remain online-only.
+
+Build the debug APK with:
+
+```bash
+npm ci
+npm run mobile:apk
+```
+
+The result is available at `android/app/build/outputs/apk/debug/app-debug.apk`. See [docs/ANDROID.md](docs/ANDROID.md) for architecture and Android Studio instructions.
 
 See:
 
@@ -445,6 +456,7 @@ v0.1.1  Bug fixes and small improvements
 v0.1.2  Patch release
 v0.2.0  New features or larger changes
 v0.3.0  Offline mobile synchronization foundation
+v0.3.1  Mobile UX, navigation, draft recovery, and settings polish
 v1.0.0  First stable release
 ```
 
@@ -457,7 +469,7 @@ ghcr.io/hng3444/suur:latest
 Stable releases can additionally be published with versioned tags such as:
 
 ```text
-ghcr.io/hng3444/suur:v0.3.0
+ghcr.io/hng3444/suur:v0.3.1
 ```
 
 ---
@@ -469,7 +481,7 @@ Suur is under active development.
 The current release is:
 
 ```text
-v0.3.0
+v0.3.1
 ```
 
 Test backups and upgrades on non-critical data before relying on a new release.

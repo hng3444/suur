@@ -1,8 +1,8 @@
-# Android client foundation
+# Android client
 
-Suur's Android client is designed as a Capacitor application with a bundled interface. It connects to any compatible self-hosted Suur server instead of embedding one fixed website. The server remains authoritative while the client keeps notes, labels, settings, and unsent changes in a per-server, per-user local database.
+Suur's Android client is a Capacitor application with a bundled, touch-first interface. It connects to any compatible self-hosted Suur server instead of embedding one fixed website. The server remains authoritative while the client keeps notes, labels, settings, cached attachments, and unsent changes in a separate local database for every server and user.
 
-Version 0.3.0 completes the offline storage and synchronization foundation. The native Android shell and screens are the next phase.
+The client includes a Keep-inspired card layout, search and filters, read and edit modes, checklists, labels, reminders, attachments, multi-select actions, archive, trash, sharing, history, a reminder calendar, profile controls, imports, exports, backups, and administrative settings.
 
 ## Server discovery
 
@@ -27,7 +27,7 @@ Content-Type: application/json
   "password": "password",
   "deviceName": "Galaxy S23",
   "platform": "android",
-  "clientVersion": "0.3.0"
+  "clientVersion": "0.3.1"
 }
 ```
 
@@ -43,14 +43,15 @@ Do not store the password, place credentials in the APK, log bearer tokens, or p
 
 ## Local offline database
 
-`IndexedDbMobileSyncStore` provides the durable browser database used by the bundled Capacitor interface. It creates separate storage for every server ID and user ID and contains four stores:
+`IndexedDbMobileSyncStore` provides the durable browser database used by the bundled Capacitor interface. It creates separate storage for every server ID and user ID and contains five stores:
 
 - `notes`: complete local note records and attachment metadata
 - `labels`: locally available labels
 - `meta`: synchronization cursor and user settings
 - `queue`: pending create, update, reorder, delete, label, and settings mutations
+- `attachments`: authenticated media cached for offline viewing
 
-The session token is deliberately excluded. The Android shell will keep it in secure native storage in the next phase. The store exposes a platform-independent interface so a native SQLite adapter can replace IndexedDB later without changing synchronization behavior.
+The session token is deliberately excluded. Android stores it in an app-private encrypted value backed by Android Keystore. The store exposes a platform-independent interface so a native SQLite adapter can replace IndexedDB later without changing synchronization behavior.
 
 ## Initial synchronization
 
@@ -90,9 +91,9 @@ Mutation IDs are scoped to the authenticated user and make retries safe when a r
 
 Note updates contain the version that was edited. If another device changed the same note first, the server returns `VERSION_CONFLICT`. The mobile synchronization engine preserves the offline text as a deterministic separate note named `(... offline copy)` instead of silently overwriting either version.
 
-## Current offline limits
+## Offline behavior
 
-Text notes, checklists, labels, settings, ordering, archiving, trash operations, and permanent deletion can use the synchronization queue. Existing attachment metadata is available offline, but downloading attachment bytes for offline viewing and uploading new files while offline are reserved for a later media-cache phase.
+Text notes, checklists, labels, settings, ordering, archiving, trash operations, and permanent deletion use the durable synchronization queue. Attachments are cached on the device after they have been viewed, so those files remain available offline. Creating a new attachment, public share link, server backup, import, export, user-management change, or history restore still requires a server connection.
 
 ## Cross-origin requests
 
@@ -104,6 +105,30 @@ SUUR_ALLOWED_APP_ORIGINS=https://app.example.com
 
 Wildcards are rejected and credential cookies are never enabled for cross-origin requests.
 
-## Next phase
+## Native capabilities
 
-The next Android phase creates the Capacitor project and native application shell, adds the server-address and sign-in screens, stores the bearer token with Android secure credentials, connects the interface to this local database, and produces the first debug APK.
+- Android notification permission and scheduled reminder notifications
+- Microphone permission and audio recording
+- Native file picker for images and supported documents
+- Android share sheet for note links and exported files
+- Android Keystore-backed bearer-session storage
+- Bundled application UI that starts without loading a remote website
+
+## Build a debug APK
+
+Install dependencies, synchronize the Android project, and build:
+
+```bash
+npm ci
+npm run mobile:sync
+cd android
+./gradlew assembleDebug
+```
+
+The debug APK is written to:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Open the Android project with `npm run mobile:android` when an emulator or signed release build is needed.
