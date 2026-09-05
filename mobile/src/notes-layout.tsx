@@ -7,7 +7,8 @@ export function NotesLayout({ children, grid }: { children: ReactNode; grid: boo
     const cards = Array.from(root.current?.children || []) as HTMLElement[];
     if (!grid) { cards.forEach((card) => card.style.removeProperty('grid-row-end')); return; }
     const measure = (card: HTMLElement) => {
-      const span = Math.ceil(card.getBoundingClientRect().height + 12);
+      const gap = Number.parseFloat(getComputedStyle(root.current!).getPropertyValue('--note-gap')) || 8;
+      const span = Math.ceil(card.getBoundingClientRect().height + gap);
       if (card.style.gridRowEnd !== `span ${span}`) card.style.gridRowEnd = `span ${span}`;
     };
     const observer = new ResizeObserver((entries) => entries.forEach((entry) => measure(entry.target as HTMLElement)));

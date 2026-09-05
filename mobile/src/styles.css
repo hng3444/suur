@@ -176,8 +176,8 @@ svg { width: 21px; height: 21px; stroke-width: 1.9; }
 
 /* Drawer */
 .drawer-layer { position:fixed; z-index:300; inset:0; visibility:hidden; background:rgba(0,0,0,0); transition:.2s; }
-.drawer-layer.open { visibility:visible; background:rgba(0,0,0,.36); }
-.app-drawer { width:min(86vw,350px); height:100%; display:grid; grid-template-rows:auto auto auto minmax(40px,1fr) auto auto; transform:translateX(-102%); padding:calc(12px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); border-radius:0 28px 28px 0; background:var(--surface); box-shadow:var(--shadow); transition:transform .24s cubic-bezier(.2,.8,.2,1); }
+.drawer-layer.open { visibility:visible; overflow:hidden; overscroll-behavior:contain; background:rgba(0,0,0,.36); }
+.app-drawer { width:min(86vw,350px); height:100%; display:grid; grid-template-rows:auto auto auto minmax(40px,1fr) auto auto; transform:translateX(-102%); overflow:hidden; overscroll-behavior:contain; touch-action:pan-y; padding:calc(12px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); border-radius:0 28px 28px 0; background:var(--surface); box-shadow:var(--shadow); transition:transform .24s cubic-bezier(.2,.8,.2,1); }
 .drawer-layer.open .app-drawer { transform:translateX(0); }
 .app-drawer header { display:grid; grid-template-columns:42px minmax(0,1fr) 40px; align-items:center; gap:9px; padding:7px 7px 18px; }
 .app-drawer header img { width:35px; height:35px; }
@@ -701,3 +701,84 @@ body {
   .notes-stage { padding-inline:8px; }
   .detail-scroll, .mobile-editor-paper { padding-inline:16px; }
 }
+
+/* Final mobile spacing pass: compact chrome, roomy content and fully visible choices. */
+.detail-scroll { padding-bottom:calc(104px + env(safe-area-inset-bottom)); }
+.mobile-editor-paper { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+.editor-color-grid {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-start;
+  gap:10px;
+  overflow:visible;
+  padding:6px 2px 10px;
+}
+.editor-color-grid button { flex:0 0 46px; }
+.editor-bottom-sheet { max-height:min(58dvh,520px); }
+.settings-section > label { gap:9px; }
+.settings-section > label + label { margin-top:2px; }
+.settings-screen > main { scrollbar-gutter:stable; }
+
+@media (max-width:390px) {
+  .keep-topbar {
+    grid-template-columns:42px minmax(0,1fr) 40px 40px 40px;
+    gap:2px;
+    padding-inline:7px;
+  }
+  .keep-topbar .top-icon,
+  .avatar-button { width:40px; height:44px; }
+  .top-search { height:48px; padding-inline:14px; }
+  .page-title-row { min-height:58px; padding-inline:14px; }
+  .page-title-row h1 { font-size:22px; }
+  .notes-stage { padding-inline:8px; }
+  .detail-scroll,
+  .mobile-editor-paper { padding-inline:16px; }
+  .detail-title,
+  .mobile-editor-title { font-size:27px; }
+  .editor-bottom-sheet { left:7px; right:7px; padding:17px; border-radius:26px; }
+  .settings-screen > main { padding-inline:13px; }
+  .settings-home { gap:18px; }
+  .settings-account-row { padding:15px; }
+  .settings-home nav button { min-height:66px; padding-inline:15px; }
+}
+
+/* Keep-style capture and balanced Galaxy-class two-column spacing. */
+.compose-fab {
+  position:fixed;
+  z-index:45;
+  right:18px;
+  bottom:calc(18px + env(safe-area-inset-bottom));
+  width:60px;
+  height:60px;
+  display:grid;
+  place-items:center;
+  border-radius:21px;
+  background:var(--accent);
+  color:var(--action-ink);
+  box-shadow:0 14px 34px color-mix(in srgb,var(--accent) 32%,transparent);
+  transition:transform .16s ease,box-shadow .16s ease;
+}
+.compose-fab:active { transform:scale(.94); box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 25%,transparent); }
+.compose-fab svg { width:27px; height:27px; }
+.view-grid .notes-layout { --note-gap:8px; column-gap:var(--note-gap); }
+.view-grid .keep-card { margin-bottom:0; }
+.view-list .notes-layout { gap:8px; }
+.trashed-editor-actions { display:flex; justify-content:flex-end; gap:10px; padding-inline:16px; }
+.trashed-editor-actions button { min-height:46px; display:inline-flex; align-items:center; gap:8px; padding:0 15px; border-radius:15px; background:var(--surface-2); color:var(--text); font-weight:750; }
+.trashed-editor-actions button.danger { background:color-mix(in srgb,var(--danger) 12%,var(--surface)); color:var(--danger); }
+.trashed-editor-actions svg { width:18px; height:18px; }
+
+/* Keep-style collapsing app bar and one continuous note-colored editor surface. */
+.keep-topbar {
+  border-bottom:0;
+  box-shadow:none;
+  transition:transform 220ms var(--ease-standard),background-color var(--motion-fast) var(--ease-standard);
+  will-change:transform;
+}
+.keep-topbar.is-hidden { transform:translateY(calc(-100% - env(safe-area-inset-top))); }
+.page-title-row.status-only { min-height:34px; padding-block:6px 0; }
+.mobile-editor { --editor-surface:var(--note-swatch,var(--surface)); background:var(--editor-surface); }
+.mobile-editor-bar,
+.mobile-editor-footer { background:color-mix(in srgb,var(--editor-surface) 96%,var(--surface)); }
+.mobile-editor-paper { background:var(--editor-surface); }
+.mobile-editor-footer { border-top-color:color-mix(in srgb,var(--text) 10%,transparent); }

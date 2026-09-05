@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const branding = getStoredBranding();
-  if (!branding.iconStoredName) return NextResponse.redirect(new URL('/suuricon.png', request.url));
+  if (!branding.iconStoredName) return NextResponse.redirect(new URL('/suuricon.png?v=20260905-fire', request.url));
   try {
     const bytes = await readFile(path.join(/* turbopackIgnore: true */ brandingUploadsDirectory(), branding.iconStoredName));
     return new NextResponse(bytes, { headers: { 'Content-Type': 'image/x-icon', 'Cache-Control': 'public, max-age=31536000, immutable' } });

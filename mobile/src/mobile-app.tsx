@@ -1,5 +1,5 @@
 import {
-  Archive, ArchiveRestore, ArrowDownUp, Check, FileText, LayoutGrid, ListTodo, LoaderCircle, Menu,
+  Archive, ArchiveRestore, ArrowDownUp, Check, FileText, LayoutGrid, LoaderCircle, Menu,
   Palette, Pin, Plus, RefreshCw, Rows3, Tag, Trash2, X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -23,7 +23,7 @@ import {
   type MobileDestination, type MobileFilters, type MobileSyncStatus,
 } from './app-surfaces.tsx';
 import { MobileAvatar } from './mobile-media.tsx';
-import { KeepNoteCard, MobileNoteEditor, MobileNoteViewer, noteMatchesQuery } from './note-surfaces.tsx';
+import { KeepNoteCard, MobileNoteEditor, noteMatchesQuery } from './note-surfaces.tsx';
 import { notificationPermission, onNotificationOpened, shareText, syncNativeReminders } from './native-capabilities.ts';
 import { applyDocumentLocale, mobileLocale, mobileText, sharedText } from './mobile-i18n.ts';
 import { clearMobileSession, loadMobileSession, saveMobileSession, type StoredMobileSession } from './secure-session.ts';
@@ -111,16 +111,17 @@ export function MobileApp() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<MobileFilters>(emptyMobileFilters);
-  const [viewerId, setViewerId] = useState('');
   const [editor, setEditor] = useState<EditorState>(null);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkSheet, setBulkSheet] = useState<BulkSheet>(null);
   const [sortOpen, setSortOpen] = useState(false);
+  const [topbarHidden, setTopbarHidden] = useState(false);
   const [snackbar, setSnackbar] = useState('');
   const [initialServer, setInitialServer] = useState('');
   const [store, setStore] = useState<IndexedDbMobileSyncStore | null>(null);
   const storeRef = useRef<IndexedDbMobileSyncStore | null>(null);
+  const stateRef = useRef<MobileLocalState | null>(null);
   const operationLock = useRef<Promise<unknown>>(Promise.resolve());
   const booted = useRef(false);
 
@@ -161,6 +162,7 @@ export function MobileApp() {
 
   useEffect(() => { if (booted.current) return; booted.current = true; void loadMobileSession().then((stored) => stored ? startSession(stored) : setPhase('login')).catch(() => setPhase('login')); }, [startSession]);
   useEffect(() => { applyDocumentLocale(locale); }, [locale]);
+  useEffect(() => { stateRef.current = state; }, [state]);
   const settings = state?.settings || fallbackMobileSettings;
   useEffect(() => {
     // Local edits also schedule reminders while the server is unavailable.
@@ -174,8 +176,38 @@ export function MobileApp() {
     window.addEventListener('online', online); window.addEventListener('offline', offline); document.addEventListener('visibilitychange', visible);
     return () => { window.removeEventListener('online', online); window.removeEventListener('offline', offline); document.removeEventListener('visibilitychange', visible); };
   }, [session, syncFor]);
-  useEffect(() => { const handle = onNotificationOpened((noteId) => setViewerId(noteId)); return () => { void handle.then((listener) => listener.remove()); }; }, []);
+  useEffect(() => {
+    const handle = onNotificationOpened((noteId) => {
+      const note = stateRef.current?.notes.find((item) => item.id === noteId);
+      if (note) setEditor({ note, original: note, isNew: false });
+    });
+    return () => { void handle.then((listener) => listener.remove()); };
+  }, []);
   useEffect(() => { if (!snackbar) return; const timer = window.setTimeout(() => setSnackbar(''), 3_500); return () => window.clearTimeout(timer); }, [snackbar]);
+  useEffect(() => {
+    if (phase !== 'ready' || drawerOpen || searchOpen || editor || sortOpen || bulkSheet || selected.size > 0) {
+      return;
+    }
+    let previousY = window.scrollY;
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const currentY = Math.max(0, window.scrollY);
+        const delta = currentY - previousY;
+        if (currentY < 28) setTopbarHidden(false);
+        else if (delta > 7 && currentY > 92) setTopbarHidden(true);
+        else if (delta < -7) setTopbarHidden(false);
+        previousY = currentY;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [bulkSheet, drawerOpen, editor, phase, searchOpen, selected.size, sortOpen]);
 
   const connect = async (record: StoredMobileSession) => { await saveMobileSession(record); await startSession(record); };
   const commit = async (operations: MobilePendingOperation[], update: (latest: MobileLocalState) => MobileLocalState) => {
@@ -205,8 +237,13 @@ export function MobileApp() {
     });
     if (session) void syncFor(session, store);
   };
-  const trashNote = async (note: Note) => { const updated = { ...note, trashedAt: note.trashedAt ? null : new Date().toISOString(), archived: note.trashedAt ? note.archived : false }; await saveNote(updated); setViewerId(''); setEditor(null); };
-  const permanentlyDelete = async (note: Note) => { if (!window.confirm(`${mobileText(locale, 'deleteForever')}?`)) return; await commit([deleteNoteOperation(note.id)], (latest) => removeLocalNote(latest, note.id)); setViewerId(''); setEditor(null); };
+  const trashNote = async (note: Note) => { const updated = { ...note, trashedAt: note.trashedAt ? null : new Date().toISOString(), archived: note.trashedAt ? note.archived : false }; await saveNote(updated); setEditor(null); };
+  const permanentlyDelete = async (note: Note) => {
+    if (!window.confirm(`${mobileText(locale, 'deleteForever')}?`)) return false;
+    await commit([deleteNoteOperation(note.id)], (latest) => removeLocalNote(latest, note.id));
+    setEditor(null);
+    return true;
+  };
   const changeSettings = async (patch: Partial<AppSettings>) => {
     await commit([settingsOperation(patch)], (latest) => ({ ...latest, settings: { ...(latest.settings || fallbackMobileSettings), ...patch } }));
     if (patch.locale) setLocale(patch.locale);
@@ -219,9 +256,9 @@ export function MobileApp() {
     const record = session;
     storeRef.current = null;
     if (record) await fetch(mobileEndpoint(record.serverUrl, '/api/mobile/auth/session'), { method: 'DELETE', headers: mobileAuthorization(record.token), credentials: 'omit', redirect: 'manual', signal: AbortSignal.timeout(5_000) }).catch(() => undefined);
-    await clearMobileSession(); setInitialServer(record?.serverUrl || ''); storeRef.current = null; setStore(null); setSession(null); setState(null); setEditor(null); setViewerId(''); setPhase('login');
+    await clearMobileSession(); setInitialServer(record?.serverUrl || ''); storeRef.current = null; setStore(null); setSession(null); setState(null); setEditor(null); setPhase('login');
   };
-  const navigate = (next: MobileDestination, labelId = '') => { setDestination(next); setActiveLabelId(labelId); setDrawerOpen(false); setSelected(new Set()); setViewerId(''); setEditor(null); };
+  const navigate = (next: MobileDestination, labelId = '') => { setDestination(next); setActiveLabelId(labelId); setDrawerOpen(false); setSelected(new Set()); setEditor(null); };
   const toggleSelected = (id: string) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const bulkUpdate = async (mapper: (note: Note) => Note) => {
     if (!state) return;
@@ -271,9 +308,47 @@ export function MobileApp() {
   }, [activeLabelId, filters, noteView, search, settings.sortOrder, state]);
   const pinned = notes.filter((note) => note.pinned);
   const others = notes.filter((note) => !note.pinned);
-  const viewerNote = state?.notes.find((note) => note.id === viewerId) || null;
   const activeLabel = state?.labels.find((label) => label.id === activeLabelId);
   const online = (typeof navigator === 'undefined' || navigator.onLine !== false) && !['offline', 'auth', 'blocked'].includes(status);
+  const openNote = (note: Note) => {
+    setEditor({ note, original: note, isNew: false });
+  };
+
+  const flushRemoteChanges = async () => {
+    if (!session || !storeRef.current) throw new Error(mobileText(locale, 'onlineRequired'));
+    const result = await syncFor(session, storeRef.current);
+    if (!result?.online || result.blocked || result.authRequired || result.pending) throw new Error(mobileText(locale, 'onlineRequired'));
+  };
+
+  const duplicateForEditor = async (note: Note) => {
+    if (!session) throw new Error(mobileText(locale, 'onlineRequired'));
+    await flushRemoteChanges();
+    const duplicate = await duplicateRemoteNote(session, note.id);
+    await persist((latest) => replaceLocalNote(latest, duplicate));
+    setSnackbar(mobileText(locale, 'duplicate'));
+  };
+
+  const shareForEditor = async (note: Note) => {
+    if (!session) throw new Error(mobileText(locale, 'onlineRequired'));
+    await flushRemoteChanges();
+    const url = await shareRemoteNote(session, note.id);
+    await shareText(note.title || 'Suur', note.content || note.title, url);
+  };
+
+  const historyForEditor = async (note: Note) => {
+    if (!session) throw new Error(mobileText(locale, 'onlineRequired'));
+    await flushRemoteChanges();
+    return noteHistory(session, note.id);
+  };
+
+  const restoreHistoryForEditor = async (note: Note, historyId: string) => {
+    if (!session) throw new Error(mobileText(locale, 'onlineRequired'));
+    await flushRemoteChanges();
+    const restored = await restoreRemoteHistory(session, note.id, historyId);
+    await persist((latest) => replaceLocalNote(latest, restored));
+    setSnackbar(mobileText(locale, 'saved'));
+    return restored;
+  };
 
   useBackLayer(destination !== 'notes', 1, () => navigate('notes'));
   useBackLayer(selected.size > 0, 2, () => setSelected(new Set()));
@@ -290,21 +365,20 @@ export function MobileApp() {
   return <main className="suur-mobile-shell">
     <AppDrawer open={drawerOpen} destination={destination} activeLabel={activeLabelId} labels={state.labels} session={session} status={status} pending={pending} locale={locale} onNavigate={navigate} onClose={() => setDrawerOpen(false)} onSync={() => { if (storeRef.current) void syncFor(session, storeRef.current); }} />
     {selected.size > 0 ? <header className="selection-bar"><button onClick={() => setSelected(new Set())}><X /></button><strong>{selected.size}</strong><span /><button onClick={() => void bulkUpdate((note) => ({ ...note, pinned: true }))}><Pin /></button><button onClick={() => void bulkUpdate((note) => ({ ...note, archived: destination !== 'archive', trashedAt: null }))}>{destination === 'archive' ? <ArchiveRestore /> : <Archive />}</button><button onClick={() => setBulkSheet('color')}><Palette /></button><button onClick={() => setBulkSheet('labels')}><Tag /></button>{destination === 'trash' ? <button onClick={() => void bulkDeleteForever()}><Trash2 /></button> : <button onClick={() => void bulkUpdate((note) => ({ ...note, trashedAt: new Date().toISOString(), archived: false }))}><Trash2 /></button>}</header>
-      : <header className="keep-topbar"><button className="top-icon" aria-label={sharedText(locale, 'nav.notes')} onClick={() => setDrawerOpen(true)}><Menu /></button><button className="top-search" onClick={() => setSearchOpen(true)}><span>{sharedText(locale, 'search')}</span>{Object.values(filters).some((value) => value !== 'all') && <i />}</button><button className="top-icon" aria-label={mobileText(locale, settings.view === 'grid' ? 'list' : 'grid')} onClick={() => void changeSettings({ view: settings.view === 'grid' ? 'list' : 'grid' })}>{settings.view === 'grid' ? <Rows3 /> : <LayoutGrid />}</button><button className="top-icon sort-button" aria-label={sharedText(locale, 'sort.title')} onClick={() => setSortOpen(!sortOpen)}><ArrowDownUp /></button><button className="avatar-button" aria-label={sharedText(locale, 'nav.settings')} onClick={() => navigate('settings')}><MobileAvatar session={session} size="small" /></button></header>}
-    <div className="page-title-row"><div><h1>{viewTitle(destination, activeLabel, locale)}</h1>{status !== 'synced' && <span className={`status-mini status-${status}`}>{status === 'syncing' && <RefreshCw className="spin" />}{status === 'offline' ? sharedText(locale, 'status.offline') : pending ? mobileText(locale, 'pending', { count: pending }) : status === 'syncing' ? sharedText(locale, 'status.syncing') : ''}</span>}</div></div>
+      : <header className={`keep-topbar ${topbarHidden && !drawerOpen && !searchOpen && !editor && !sortOpen && !bulkSheet ? 'is-hidden' : ''}`}><button className="top-icon" aria-label={sharedText(locale, 'nav.notes')} onClick={() => setDrawerOpen(true)}><Menu /></button><button className="top-search" onClick={() => setSearchOpen(true)}><span>{sharedText(locale, 'search')}</span>{Object.values(filters).some((value) => value !== 'all') && <i />}</button><button className="top-icon" aria-label={mobileText(locale, settings.view === 'grid' ? 'list' : 'grid')} onClick={() => void changeSettings({ view: settings.view === 'grid' ? 'list' : 'grid' })}>{settings.view === 'grid' ? <Rows3 /> : <LayoutGrid />}</button><button className="top-icon sort-button" aria-label={sharedText(locale, 'sort.title')} onClick={() => setSortOpen(!sortOpen)}><ArrowDownUp /></button><button className="avatar-button" aria-label={sharedText(locale, 'nav.settings')} onClick={() => navigate('settings')}><MobileAvatar session={session} size="small" /></button></header>}
+    {(destination !== 'notes' || activeLabel || status !== 'synced') && <div className={`page-title-row ${destination === 'notes' && !activeLabel ? 'status-only' : ''}`}><div>{(destination !== 'notes' || activeLabel) && <h1>{viewTitle(destination, activeLabel, locale)}</h1>}{status !== 'synced' && <span className={`status-mini status-${status}`}>{status === 'syncing' && <RefreshCw className="spin" />}{status === 'offline' ? sharedText(locale, 'status.offline') : pending ? mobileText(locale, 'pending', { count: pending }) : status === 'syncing' ? sharedText(locale, 'status.syncing') : ''}</span>}</div></div>}
     {status === 'auth' && <button className="sync-warning" onClick={() => void signOut()}>{mobileText(locale, 'authRequired')}<strong>{mobileText(locale, 'retryLogin')}</strong></button>}
     {status === 'blocked' && <p className="sync-warning">{mobileText(locale, 'syncBlocked')}</p>}
-    {destination === 'calendar' ? <CalendarSurface notes={state.notes} locale={locale} onOpen={(note) => setViewerId(note.id)} /> : <section className={`notes-stage view-${settings.view}`}>
-      {pinned.length > 0 && <section className="note-section"><h2>{sharedText(locale, 'pinned')}</h2><NotesLayout grid={settings.view === 'grid'}>{pinned.map((note) => <KeepNoteCard key={note.id} note={note} locale={locale} session={session} store={store} selected={selected.has(note.id)} selectionMode={selected.size > 0} onOpen={() => setViewerId(note.id)} onSelect={() => toggleSelected(note.id)} />)}</NotesLayout></section>}
-      {others.length > 0 && <section className="note-section"><h2>{pinned.length ? sharedText(locale, 'others') : ''}</h2><NotesLayout grid={settings.view === 'grid'}>{others.map((note) => <KeepNoteCard key={note.id} note={note} locale={locale} session={session} store={store} selected={selected.has(note.id)} selectionMode={selected.size > 0} onOpen={() => setViewerId(note.id)} onSelect={() => toggleSelected(note.id)} />)}</NotesLayout></section>}
+    {destination === 'calendar' ? <CalendarSurface notes={state.notes} locale={locale} onOpen={openNote} /> : <section className={`notes-stage view-${settings.view}`}>
+      {pinned.length > 0 && <section className="note-section"><h2>{sharedText(locale, 'pinned')}</h2><NotesLayout grid={settings.view === 'grid'}>{pinned.map((note) => <KeepNoteCard key={note.id} note={note} locale={locale} session={session} store={store} selected={selected.has(note.id)} selectionMode={selected.size > 0} onOpen={() => openNote(note)} onSelect={() => toggleSelected(note.id)} />)}</NotesLayout></section>}
+      {others.length > 0 && <section className="note-section"><h2>{pinned.length ? sharedText(locale, 'others') : ''}</h2><NotesLayout grid={settings.view === 'grid'}>{others.map((note) => <KeepNoteCard key={note.id} note={note} locale={locale} session={session} store={store} selected={selected.has(note.id)} selectionMode={selected.size > 0} onOpen={() => openNote(note)} onSelect={() => toggleSelected(note.id)} />)}</NotesLayout></section>}
       {!notes.length && <div className="notes-empty"><FileText /><strong>{search || Object.values(filters).some((value) => value !== 'all') ? sharedText(locale, 'empty.noMatch') : mobileText(locale, 'noNotes')}</strong><span>{sharedText(locale, search ? 'empty.searchHint' : destination === 'trash' ? 'empty.trashHint' : 'empty.firstHint')}</span></div>}
     </section>}
-    {destination === 'notes' && !activeLabelId && selected.size === 0 && <div className="compose-dock"><button className="compose-main" onClick={() => setEditor({ note: createMobileNote(state, 'text'), isNew: true })}>{sharedText(locale, 'newNote')}</button><button onClick={() => setEditor({ note: createMobileNote(state, 'checklist'), isNew: true })}><ListTodo /></button><button className="compose-plus" onClick={() => setEditor({ note: createMobileNote(state, 'text'), isNew: true })}><Plus /></button></div>}
+    {destination === 'notes' && !activeLabelId && selected.size === 0 && <button className="compose-fab" onClick={() => setEditor({ note: createMobileNote(state, 'text'), isNew: true })} aria-label={sharedText(locale, 'newNote')}><Plus /></button>}
     {sortOpen && <div className="sort-menu"><header><strong>{sharedText(locale, 'sort.title')}</strong><button onClick={() => setSortOpen(false)}><X /></button></header>{(['manual', 'updated-desc', 'updated-asc', 'created-desc', 'created-asc', 'title-asc'] as AppSettings['sortOrder'][]).map((order) => <button key={order} className={settings.sortOrder === order ? 'selected' : ''} onClick={() => { void changeSettings({ sortOrder: order }); setSortOpen(false); }}>{sharedText(locale, `sort.${order}` as Parameters<typeof sharedText>[1])}{settings.sortOrder === order && <Check />}</button>)}</div>}
     {bulkSheet && <div className="subsheet-backdrop" onClick={() => setBulkSheet(null)}><section className="bulk-sheet" onClick={(event) => event.stopPropagation()}><header><strong>{bulkSheet === 'color' ? mobileText(locale, 'color') : mobileText(locale, 'labels')}</strong><button onClick={() => setBulkSheet(null)}><X /></button></header>{bulkSheet === 'color' ? <div className="bulk-colors">{noteColors.map((color) => <button key={color} className={`color-choice note-color-${color}`} onClick={() => void bulkUpdate((note) => ({ ...note, color }))} />)}</div> : <div className="bulk-labels">{state.labels.map((label) => <button key={label.id} onClick={() => void bulkUpdate((note) => ({ ...note, labels: note.labels.some((item) => item.id === label.id) ? note.labels : [...note.labels, label] }))}><i style={{ background: label.color }} />{label.name}</button>)}</div>}</section></div>}
     {searchOpen && <SearchSurface locale={locale} query={search} filters={filters} labels={state.labels} onQuery={setSearch} onFilters={setFilters} onClose={() => setSearchOpen(false)} />}
-    {viewerNote && <MobileNoteViewer note={viewerNote} locale={locale} session={session} store={store} view={destination} online={online} onClose={() => setViewerId('')} onEdit={() => setEditor({ note: viewerNote, isNew: false })} onUpdate={(note) => saveNote(note)} onTrash={() => trashNote(viewerNote)} onDeleteForever={() => permanentlyDelete(viewerNote)} onDuplicate={async () => { try { const note = await duplicateRemoteNote(session, viewerNote.id); await persist((latest) => replaceLocalNote(latest, note)); setViewerId(note.id); setSnackbar(mobileText(locale, 'duplicate')); } catch (error) { setSnackbar(error instanceof Error ? error.message : mobileText(locale, 'failed')); } }} onShare={async () => { try { const url = await shareRemoteNote(session, viewerNote.id); await shareText(viewerNote.title || 'Suur', viewerNote.content || viewerNote.title, url); } catch (error) { setSnackbar(error instanceof Error ? error.message : mobileText(locale, 'failed')); } }} onHistory={() => noteHistory(session, viewerNote.id)} onRestoreHistory={async (historyId) => { const note = await restoreRemoteHistory(session, viewerNote.id, historyId); await persist((latest) => replaceLocalNote(latest, note)); setSnackbar(mobileText(locale, 'saved')); }} />}
-    {editor && <MobileNoteEditor originalNote={editor.original} note={editor.note} isNew={editor.isNew} locale={locale} labels={state.labels} users={users} session={session} store={store} online={online} completedItemsBottom={settings.completedItemsBottom} onClose={() => setEditor(null)} onSave={saveNote} onDelete={trashNote} onUpload={uploadAttachment} onDeleteAttachment={deleteAttachment} onRequestNotifications={async () => { const granted = await notificationPermission(true); if (granted && !settings.notificationsEnabled) await changeSettings({ notificationsEnabled: true }); return granted; }} />}
+    {editor && <MobileNoteEditor originalNote={editor.original} note={editor.note} isNew={editor.isNew} locale={locale} labels={state.labels} users={users} session={session} store={store} online={online} completedItemsBottom={settings.completedItemsBottom} onClose={() => setEditor(null)} onSave={saveNote} onDelete={trashNote} onDeleteForever={permanentlyDelete} onDuplicate={duplicateForEditor} onShare={shareForEditor} onHistory={historyForEditor} onRestoreHistory={restoreHistoryForEditor} onUpload={uploadAttachment} onDeleteAttachment={deleteAttachment} onRequestNotifications={async () => { const granted = await notificationPermission(true); if (granted && !settings.notificationsEnabled) await changeSettings({ notificationsEnabled: true }); return granted; }} />}
     {snackbar && <button className="mobile-snackbar" onClick={() => setSnackbar('')}>{snackbar}<X /></button>}
   </main>;
 }

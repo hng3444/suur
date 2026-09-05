@@ -92,6 +92,17 @@ export function AppDrawer({ open, destination, activeLabel, labels, session, sta
   onClose: () => void;
   onSync: () => void;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    const bodyOverflow = document.body.style.overflow;
+    const rootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = rootOverflow;
+    };
+  }, [open]);
   const items: Array<{ id: NoteView; icon: typeof Lightbulb; label: Parameters<typeof sharedText>[1] }> = [
     { id: 'notes', icon: Lightbulb, label: 'nav.notes' },
     { id: 'reminders', icon: Bell, label: 'nav.reminders' },

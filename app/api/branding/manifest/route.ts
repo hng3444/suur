@@ -9,9 +9,9 @@ export async function GET() {
   const icons = branding.hasCustomIcon
     ? [{ src: `/api/branding/icon?v=${encodeURIComponent(branding.iconVersion)}`, sizes: 'any', type: 'image/x-icon', purpose: 'any' }]
     : [
-      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: '/icon-192.png?v=20260905-fire', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png?v=20260905-fire', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icon-maskable-512.png?v=20260905-fire', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ];
   return NextResponse.json({
     name: branding.appName,

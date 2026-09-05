@@ -1,9 +1,9 @@
-const STATIC_CACHE = 'suur-static-v8';
+const STATIC_CACHE = 'suur-static-v10';
 const PRIVATE_CACHE_PREFIX = 'suur-private-v2-';
 const PRIVATE_META_CACHE = 'suur-private-meta-v2';
 const PRIVATE_META_KEY = '/__suur_private_user__';
 const OFFLINE_SHELL = '/__suur_offline_shell__';
-const APP_SHELL = ['/offline.html', '/manifest.webmanifest', '/suuricon.png', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png'];
+const APP_SHELL = ['/offline.html', '/manifest.webmanifest', '/suuricon.png?v=20260905-fire', '/apple-touch-icon.png?v=20260905-fire', '/icon-192.png?v=20260905-fire', '/icon-512.png?v=20260905-fire', '/icon-maskable-512.png?v=20260905-fire'];
 
 function safeUserId(value) {
   return typeof value === 'string' ? value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) : '';
@@ -120,7 +120,7 @@ async function checkRemindersInBackground() {
         body: note.type === 'checklist'
           ? note.items.filter((item) => !item.checked).slice(0, 3).map((item) => item.text).join(' · ')
           : String(note.content || '').slice(0, 180),
-        icon: '/icon-192.png', badge: '/icon-192.png', tag, data: { url: '/#reminders' },
+        icon: '/icon-192.png?v=20260905-fire', badge: '/icon-192.png?v=20260905-fire', tag, data: { url: '/#reminders' },
       });
       await cache.put(marker, new Response(new Date().toISOString()));
     }

@@ -9,9 +9,11 @@ import {
   CheckCircle2,
   CheckSquare,
   Code2,
+  Copy,
   Download,
   Eye,
   FileText,
+  History,
   ListTodo,
   LoaderCircle,
   Mic,
@@ -21,6 +23,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Share2,
   Tag,
   Trash2,
   Type,
@@ -55,6 +58,8 @@ interface NoteEditorProps {
   onTrash: () => void;
   onRestore: () => void;
   onPermanentDelete: () => void;
+  onDuplicate: () => void;
+  onShare: () => void;
   uploadFeedback: UploadFeedback | null;
   onUpload: (file: File) => Promise<boolean>;
   onEnableNotifications: () => Promise<void>;
@@ -87,6 +92,8 @@ export function NoteEditor({
   onTrash,
   onRestore,
   onPermanentDelete,
+  onDuplicate,
+  onShare,
   uploadFeedback,
   onUpload,
   onEnableNotifications,
@@ -107,11 +114,29 @@ export function NoteEditor({
   const [reminderNotice, setReminderNotice] = useState('');
   const [activePanel, setActivePanel] = useState<'reminder' | 'assignee' | 'labels' | 'color' | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<Array<{ id: string; version: number; createdAt: string; title: string; preview: string; changedBy: string | null }>>([]);
   const readOnly = view === 'trash';
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
   const ui = (turkish: string, english: string) => locale === 'tr' ? turkish : english;
   const imageAttachments = note.attachments.filter((attachment) => attachment.mimeType.startsWith('image/'));
   const otherAttachments = note.attachments.filter((attachment) => !attachment.mimeType.startsWith('image/'));
+
+  const openHistory = async () => {
+    const next = !historyOpen;
+    setHistoryOpen(next);
+    setMoreOpen(false);
+    if (!next || history.length || note.version === 0) return;
+    const response = await fetch(`/api/notes/${note.id}/history`);
+    if (response.ok) setHistory((await response.json()).history);
+  };
+
+  const restoreHistory = async (historyId: string) => {
+    const response = await fetch(`/api/notes/${note.id}/history`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ historyId }) });
+    if (!response.ok) return;
+    onChange((await response.json()).note);
+    setHistoryOpen(false);
+  };
 
   useEffect(() => () => voiceStream.current?.getTracks().forEach((track) => track.stop()), []);
 
@@ -326,7 +351,7 @@ export function NoteEditor({
           placeholder={t('editor.title')}
           maxLength={500}
           readOnly={readOnly}
-          autoFocus={!readOnly}
+          autoFocus={!readOnly && note.version === 0}
         />
 
         {note.type === 'checklist' ? (
@@ -419,6 +444,8 @@ export function NoteEditor({
           </div>
         )}
 
+        {historyOpen && <section className="history-panel"><header><strong>{ui('Not geçmişi', 'Note history')}</strong><span>{ui('Son 100 sürüm', 'Last 100 versions')}</span></header>{history.length === 0 ? <p>{ui('Henüz önceki sürüm yok.', 'No previous version yet.')}</p> : history.map((item) => <button key={item.id} onClick={() => void restoreHistory(item.id)}><span><strong>{item.title || t('untitled')}</strong><small>{new Date(item.createdAt).toLocaleString(locale)}{item.changedBy ? ` · ${item.changedBy}` : ''}</small></span><em>{item.preview || `${ui('Sürüm', 'Version')} ${item.version}`}</em><Undo2 size={15} /></button>)}</section>}
+
         <footer className="editor-footer">
           <div className="editor-tools">
             {!readOnly ? (
@@ -435,6 +462,9 @@ export function NoteEditor({
                   <button className={`toolbar-button ${recording ? 'recording' : ''}`} disabled={offline} onClick={() => void toggleVoice()} aria-label={t('editor.voice')} title={recording ? ui('Kaydı bitir', 'Stop recording') : t('editor.voice')}><Mic size={18} /><span className="more-tool-label">{t('editor.voice')}</span></button>
                   {note.type === 'text' && <button className={`toolbar-button ${note.contentFormat === 'markdown' ? 'active' : ''}`} onClick={() => { onChange({ ...note, contentFormat: note.contentFormat === 'markdown' ? 'plain' : 'markdown' }); setPreview(false); }} aria-label="Markdown" title="Markdown"><Code2 size={18} /><span className="more-tool-label">Markdown</span></button>}
                   {note.type === 'text' && note.contentFormat === 'markdown' && <button className={`toolbar-button ${preview ? 'active' : ''}`} onClick={() => setPreview((value) => !value)} aria-label={t('editor.preview')} title={t('editor.preview')}><Eye size={18} /><span className="more-tool-label">{t('editor.preview')}</span></button>}
+                  <button className="toolbar-button" disabled={note.version === 0 || offline} onClick={() => void openHistory()} aria-label={ui('Not geçmişi', 'Note history')} title={ui('Not geçmişi', 'Note history')}><History size={18} /><span className="more-tool-label">{ui('Not geçmişi', 'Note history')}</span></button>
+                  <button className="toolbar-button" disabled={note.version === 0 || offline} onClick={() => { setMoreOpen(false); onDuplicate(); }} aria-label={ui('Notu çoğalt', 'Duplicate note')} title={ui('Notu çoğalt', 'Duplicate note')}><Copy size={18} /><span className="more-tool-label">{ui('Kopyasını oluştur', 'Make a copy')}</span></button>
+                  {note.ownerId === currentUserId && <button className="toolbar-button" disabled={note.version === 0 || offline} onClick={() => { setMoreOpen(false); onShare(); }} aria-label={ui('Salt-okunur bağlantı paylaş', 'Share read-only link')} title={ui('Salt-okunur bağlantı paylaş', 'Share read-only link')}><Share2 size={18} /><span className="more-tool-label">{ui('Bağlantı paylaş', 'Share link')}</span></button>}
                   <button className="toolbar-button" onClick={onArchive} aria-label={note.archived ? t('unarchive') : t('archive')} title={note.archived ? t('unarchive') : t('archive')}>{note.archived ? <ArchiveRestore size={18} /> : <Archive size={18} />}<span className="more-tool-label">{note.archived ? t('unarchive') : t('archive')}</span></button>
                   <button className="toolbar-button danger" onClick={onTrash} aria-label={t('moveTrash')} title={t('moveTrash')}><Trash2 size={18} /><span className="more-tool-label">{t('moveTrash')}</span></button>
                 </div>

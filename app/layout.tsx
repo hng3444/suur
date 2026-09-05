@@ -8,7 +8,7 @@ const publicUrl = process.env.SUUR_PUBLIC_URL || 'http://localhost:3000';
 
 export async function generateMetadata(): Promise<Metadata> {
   const branding = getBranding();
-  const icon = branding.hasCustomIcon ? `/api/branding/icon?v=${encodeURIComponent(branding.iconVersion)}` : '/suuricon.png';
+  const icon = branding.hasCustomIcon ? `/api/branding/icon?v=${encodeURIComponent(branding.iconVersion)}` : '/suuricon.png?v=20260905-fire';
   return {
     metadataBase: new URL(publicUrl),
     title: branding.appName,
@@ -18,8 +18,8 @@ export async function generateMetadata(): Promise<Metadata> {
     manifest: '/api/branding/manifest',
     icons: { icon: [{ url: icon }], apple: [{ url: branding.hasCustomIcon ? icon : '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }] },
     appleWebApp: { capable: true, statusBarStyle: 'default', title: branding.appName },
-    openGraph: { title: branding.appName, description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.', type: 'website', images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Suur self-hosted notes app' }] },
-    twitter: { card: 'summary_large_image', title: branding.appName, description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.', images: ['/og.png'] },
+    openGraph: { title: branding.appName, description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.', type: 'website', images: [{ url: '/og.png?v=20260905-fire', width: 1200, height: 630, alt: 'Suur self-hosted notes app' }] },
+    twitter: { card: 'summary_large_image', title: branding.appName, description: 'Fast, multilingual, offline-first note-taking with Docker, SQLite, and full data ownership.', images: ['/og.png?v=20260905-fire'] },
     robots: { index: false, follow: false },
   };
 }

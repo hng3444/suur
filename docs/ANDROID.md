@@ -27,7 +27,7 @@ Content-Type: application/json
   "password": "password",
   "deviceName": "Galaxy S23",
   "platform": "android",
-  "clientVersion": "0.3.2"
+  "clientVersion": "0.3.3"
 }
 ```
 
