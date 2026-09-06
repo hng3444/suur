@@ -53,7 +53,7 @@ async function scheduleReminders(notes: Note[], locale: Locale, appName: string,
       schedule: { at: new Date(note.reminderAt!), allowWhileIdle: true },
       isExactNotification: false,
       extra: { noteId: note.id },
-      iconColor: '#3f5efb',
+      iconColor: '#ff6a00',
     }));
   const fingerprint = JSON.stringify(notifications);
   if (lastReminderState === fingerprint) return true;

@@ -53,7 +53,7 @@ export const reorderSchema = z.object({
 export const labelCreateSchema = z.object({
   id: idSchema.optional(),
   name: z.string().trim().min(1).max(80),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#3f5efb'),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#ff6a00'),
 });
 
 export const labelUpdateSchema = labelCreateSchema.omit({ id: true }).partial().refine(
