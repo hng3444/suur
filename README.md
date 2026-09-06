@@ -4,7 +4,7 @@ Suur is an offline-first, self-hosted note-taking app inspired by the simplicity
 
 It runs as a single Docker container, stores persistent data in SQLite under `/data`, installs as a PWA, and keeps text and checklist edits available when the network drops.
 
-**Current release:** `v0.3.3`
+**Current release:** `v0.3.4`
 
 **Keywords:** self-hosted notes, offline-first notes app, private Google Keep alternative, Docker note-taking app, CasaOS notes, SQLite PWA.
 
@@ -202,7 +202,7 @@ ghcr.io/hng3444/suur:latest
 Current release:
 
 ```text
-ghcr.io/hng3444/suur:v0.3.3
+ghcr.io/hng3444/suur:v0.3.4
 ```
 
 ### Minimal Compose example
@@ -459,6 +459,7 @@ v0.3.0  Offline mobile synchronization foundation
 v0.3.1  Mobile UX, navigation, draft recovery, and settings polish
 v0.3.2  Back navigation, vibrant theme, color picker, and motion polish
 v0.3.3  Keep-style mobile chrome, unified note colors, and refreshed fire branding
+v0.3.4  Unified Android/PWA icon scale, always-visible voice capture, and single-surface note scrolling
 v1.0.0  First stable release
 ```
 
@@ -471,7 +472,7 @@ ghcr.io/hng3444/suur:latest
 Stable releases can additionally be published with versioned tags such as:
 
 ```text
-ghcr.io/hng3444/suur:v0.3.3
+ghcr.io/hng3444/suur:v0.3.4
 ```
 
 ---
@@ -483,7 +484,7 @@ Suur is under active development.
 The current release is:
 
 ```text
-v0.3.3
+v0.3.4
 ```
 
 Test backups and upgrades on non-critical data before relying on a new release.

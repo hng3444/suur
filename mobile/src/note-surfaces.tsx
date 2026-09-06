@@ -146,6 +146,16 @@ export function MobileNoteViewer({ note, locale, session, store, online, onClose
   const [history, setHistory] = useState<NoteHistoryEntry[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    const bodyOverflow = document.body.style.overflow;
+    const rootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = rootOverflow;
+    };
+  }, []);
   useBackLayer(true, 20, onClose);
   useBackLayer(menu || history !== null, 25, () => { setMenu(false); setHistory(null); });
   const images = note.attachments.filter((item) => item.mimeType.startsWith('image/'));
@@ -240,6 +250,7 @@ export function MobileNoteEditor({ note, isNew, originalNote, locale, labels, us
   const [requestingAudio, setRequestingAudio] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const contentInput = useRef<HTMLTextAreaElement>(null);
   const recorder = useRef<MediaRecorder | null>(null);
   const recordingStream = useRef<MediaStream | null>(null);
   const savingRef = useRef(false);
@@ -251,6 +262,17 @@ export function MobileNoteEditor({ note, isNew, originalNote, locale, labels, us
   const finished = useRef(false);
   const owned = draft.ownerId === session.user.id;
   const trashed = Boolean(draft.trashedAt);
+
+  useEffect(() => {
+    const bodyOverflow = document.body.style.overflow;
+    const rootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = rootOverflow;
+    };
+  }, []);
 
   // Keep an unsent recovery draft locally; it never replaces the text being typed.
   useEffect(() => {
@@ -280,6 +302,15 @@ export function MobileNoteEditor({ note, isNew, originalNote, locale, labels, us
     const timer = window.setInterval(() => setSeconds((value) => value + 1), 1_000);
     return () => window.clearInterval(timer);
   }, [recording]);
+
+  // Keep one continuous scroll surface: the note sheet scrolls while the text
+  // area grows with its contents instead of scrolling independently.
+  useEffect(() => {
+    const input = contentInput.current;
+    if (!input || preview || draft.type !== 'text') return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.max(input.scrollHeight, Math.round(window.innerHeight * 0.44))}px`;
+  }, [draft.content, draft.type, preview]);
 
   useEffect(() => {
     mounted.current = true;
@@ -495,16 +526,16 @@ export function MobileNoteEditor({ note, isNew, originalNote, locale, labels, us
       <main className="mobile-editor-paper">
         {draft.attachments.filter((item) => item.mimeType.startsWith('image/')).length > 0 && <div className="editor-gallery">{draft.attachments.filter((item) => item.mimeType.startsWith('image/')).map((attachment) => <div key={attachment.id}><MobileAttachment attachment={attachment} session={session} store={store} /><button onClick={() => { void removeAttachment(attachment); }}><X /></button></div>)}</div>}
         <input className="mobile-editor-title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={sharedText(locale, 'editor.title')} maxLength={500} disabled={trashed} />
-        {draft.type === 'checklist' ? <div className="mobile-editor-checklist">{displayItems.map((item) => <div key={item.id} className={item.checked ? 'checked' : ''}><button onClick={() => updateItem(item.id, { checked: !item.checked })}>{item.checked && <Check />}</button><input data-check-id={item.id} value={item.text} onChange={(event) => updateItem(item.id, { text: event.target.value })} onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter') { event.preventDefault(); addItem(item.id); } else if (event.key === 'Backspace' && !item.text && draft.items.length > 1) { event.preventDefault(); setDraft((current) => ({ ...current, items: current.items.filter((value) => value.id !== item.id) })); } }} placeholder={sharedText(locale, 'editor.item')} disabled={trashed} /><button className="remove-row" onClick={() => setDraft((current) => ({ ...current, items: current.items.filter((value) => value.id !== item.id) }))}><X /></button></div>)}{!trashed && <button className="editor-add-row" onClick={() => addItem()}><Plus />{sharedText(locale, 'editor.addItem')}</button>}</div> : <>{draft.contentFormat === 'markdown' && <div className="markdown-mode-indicator"><span><Code2 />{mobileText(locale, 'markdownEnabled')}</span><button onClick={() => setPreview((value) => !value)}>{preview ? mobileText(locale, 'editText') : mobileText(locale, 'previewText')}</button></div>}{preview && draft.contentFormat === 'markdown' ? <div className="mobile-markdown-preview"><MarkdownView value={draft.content} /></div> : <textarea className="mobile-editor-content" value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder={sharedText(locale, 'newNote')} maxLength={100_000} disabled={trashed} autoFocus={isNew && !draft.title} />}</>}
+        {draft.type === 'checklist' ? <div className="mobile-editor-checklist">{displayItems.map((item) => <div key={item.id} className={item.checked ? 'checked' : ''}><button onClick={() => updateItem(item.id, { checked: !item.checked })}>{item.checked && <Check />}</button><input data-check-id={item.id} value={item.text} onChange={(event) => updateItem(item.id, { text: event.target.value })} onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === 'Enter') { event.preventDefault(); addItem(item.id); } else if (event.key === 'Backspace' && !item.text && draft.items.length > 1) { event.preventDefault(); setDraft((current) => ({ ...current, items: current.items.filter((value) => value.id !== item.id) })); } }} placeholder={sharedText(locale, 'editor.item')} disabled={trashed} /><button className="remove-row" onClick={() => setDraft((current) => ({ ...current, items: current.items.filter((value) => value.id !== item.id) }))}><X /></button></div>)}{!trashed && <button className="editor-add-row" onClick={() => addItem()}><Plus />{sharedText(locale, 'editor.addItem')}</button>}</div> : <>{draft.contentFormat === 'markdown' && <div className="markdown-mode-indicator"><span><Code2 />{mobileText(locale, 'markdownEnabled')}</span><button onClick={() => setPreview((value) => !value)}>{preview ? mobileText(locale, 'editText') : mobileText(locale, 'previewText')}</button></div>}{preview && draft.contentFormat === 'markdown' ? <div className="mobile-markdown-preview"><MarkdownView value={draft.content} /></div> : <textarea ref={contentInput} className="mobile-editor-content" value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder={sharedText(locale, 'newNote')} maxLength={100_000} disabled={trashed} autoFocus={isNew && !draft.title} />}</>}
         {draft.attachments.filter((item) => !item.mimeType.startsWith('image/')).length > 0 && <div className="editor-file-list">{draft.attachments.filter((item) => !item.mimeType.startsWith('image/')).map((attachment) => <div key={attachment.id}><MobileAttachment attachment={attachment} session={session} store={store} /><button onClick={() => { void removeAttachment(attachment); }}><X /></button></div>)}</div>}
         {message && <div className="editor-message" role="status">{uploading && <LoaderCircle className="spin" />}{recording && <Mic />}{message}{recording && ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`}</div>}
       </main>
       {!trashed ? <footer className="mobile-editor-footer">
-        <div className="editor-primary-tools"><button className={panel === 'add' ? 'active' : ''} aria-label={sharedText(locale, 'editor.attachment')} onClick={() => setPanel(panel === 'add' ? null : 'add')}><Plus /></button><button className={panel === 'color' ? 'active' : ''} aria-label={sharedText(locale, 'editor.color')} onClick={() => setPanel(panel === 'color' ? null : 'color')}><Palette /></button><button className={panel === 'labels' ? 'active' : ''} aria-label={sharedText(locale, 'editor.labels')} onClick={() => setPanel(panel === 'labels' ? null : 'labels')}><Tag /></button><button className={panel === 'more' ? 'active' : ''} aria-label={sharedText(locale, 'editor.more')} onClick={() => setPanel(panel === 'more' ? null : 'more')}><MoreVertical /></button></div>
+        <div className="editor-primary-tools"><button className={panel === 'add' ? 'active' : ''} aria-label={sharedText(locale, 'editor.attachment')} onClick={() => setPanel(panel === 'add' ? null : 'add')}><Plus /></button><button className={recording ? 'recording' : ''} aria-label={recording ? mobileText(locale, 'stop') : mobileText(locale, 'voice')} disabled={requestingAudio || uploading} onClick={() => { setPanel(null); void toggleRecording(); }}>{requestingAudio ? <LoaderCircle className="spin" /> : <Mic />}</button><button className={panel === 'color' ? 'active' : ''} aria-label={sharedText(locale, 'editor.color')} onClick={() => setPanel(panel === 'color' ? null : 'color')}><Palette /></button><button className={panel === 'labels' ? 'active' : ''} aria-label={sharedText(locale, 'editor.labels')} onClick={() => setPanel(panel === 'labels' ? null : 'labels')}><Tag /></button><button className={panel === 'more' ? 'active' : ''} aria-label={sharedText(locale, 'editor.more')} onClick={() => setPanel(panel === 'more' ? null : 'more')}><MoreVertical /></button></div>
         <button className="editor-save" onClick={requestClose} disabled={saving || uploading || requestingAudio}>{saving || uploading ? <LoaderCircle className="spin" /> : mobileText(locale, 'save')}</button>
       </footer> : <footer className="mobile-editor-footer trashed-editor-actions"><button onClick={() => void restoreDraft()} disabled={saving}><ArchiveRestore />{mobileText(locale, 'restore')}</button>{owned && <button className="danger" onClick={() => void deleteForever()} disabled={saving}><Trash2 />{mobileText(locale, 'deleteForever')}</button>}</footer>}
       {panel && <div className="editor-panel-layer" onClick={() => setPanel(null)}><section className="editor-bottom-sheet" onClick={(event) => event.stopPropagation()}>
-        {panel === 'add' && <><div className="editor-action-grid"><button onClick={() => imageInput.current?.click()}><ImagePlus /><span>{mobileText(locale, 'image')}</span></button><button onClick={() => fileInput.current?.click()}><Paperclip /><span>{mobileText(locale, 'file')}</span></button><button className={recording ? 'recording' : ''} disabled={requestingAudio || uploading} onClick={() => void toggleRecording()}>{requestingAudio ? <LoaderCircle className="spin" /> : <Mic />}<span>{recording ? mobileText(locale, 'stop') : mobileText(locale, 'voice')}</span></button><button onClick={() => setDraft({ ...draft, type: draft.type === 'text' ? 'checklist' : 'text', items: draft.items.length ? draft.items : [createMobileChecklistItem()] })}>{draft.type === 'text' ? <ListTodo /> : <Type />}<span>{draft.type === 'text' ? mobileText(locale, 'checklist') : mobileText(locale, 'textNote')}</span></button></div>{recording && <div className="voice-recorder-card" role="status"><span className="recording-dot" /><div><strong>{mobileText(locale, 'recording')} · {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}</strong><small>{mobileText(locale, 'voiceHelp')}</small></div><button onClick={() => void toggleRecording()}><span />{mobileText(locale, 'stop')}</button></div>}</>}
+        {panel === 'add' && <div className="editor-action-grid"><button onClick={() => imageInput.current?.click()}><ImagePlus /><span>{mobileText(locale, 'image')}</span></button><button onClick={() => fileInput.current?.click()}><Paperclip /><span>{mobileText(locale, 'file')}</span></button><button onClick={() => setDraft({ ...draft, type: draft.type === 'text' ? 'checklist' : 'text', items: draft.items.length ? draft.items : [createMobileChecklistItem()] })}>{draft.type === 'text' ? <ListTodo /> : <Type />}<span>{draft.type === 'text' ? mobileText(locale, 'checklist') : mobileText(locale, 'textNote')}</span></button></div>}
         {panel === 'color' && <div className="editor-color-grid" role="radiogroup" aria-label={sharedText(locale, 'editor.color')}>{noteColors.map((color) => <button key={color} role="radio" aria-checked={draft.color === color} className={`color-choice note-color-${color} ${draft.color === color ? 'selected' : ''}`} onClick={() => setDraft({ ...draft, color })} aria-label={sharedText(locale, `color.${color}`)} title={sharedText(locale, `color.${color}`)}>{draft.color === color && <Check />}</button>)}</div>}
         {panel === 'labels' && <div className="editor-label-list">{labels.length ? labels.map((label) => <button key={label.id} className={draft.labels.some((item) => item.id === label.id) ? 'selected' : ''} onClick={() => toggleLabel(label)}><i style={{ background: label.color }} />{label.name}{draft.labels.some((item) => item.id === label.id) && <Check />}</button>) : <p>{sharedText(locale, 'editor.noLabels')}</p>}</div>}
         {panel === 'assignee' && <div className="assignee-list"><button className={!draft.assignedUserId ? 'selected' : ''} onClick={() => setDraft({ ...draft, assignedUserId: null })}><UserRound />{mobileText(locale, 'onlyMe')}{!draft.assignedUserId && <Check />}</button>{users.filter((user) => user.id !== draft.ownerId).map((user) => <button key={user.id} className={draft.assignedUserId === user.id ? 'selected' : ''} disabled={!owned} onClick={() => setDraft({ ...draft, assignedUserId: user.id })}><UserRound />{user.displayName}<small>@{user.username}</small>{draft.assignedUserId === user.id && <Check />}</button>)}</div>}

@@ -100,6 +100,7 @@ export function NoteEditor({
   onDeleteAttachment,
 }: NoteEditorProps) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const contentInput = useRef<HTMLTextAreaElement>(null);
   const moreToolsRef = useRef<HTMLDivElement>(null);
   const itemInputs = useRef(new Map<string, HTMLInputElement>());
   const pendingItemFocus = useRef<string | null>(null);
@@ -155,6 +156,13 @@ export function NoteEditor({
     const timer = window.setInterval(() => setRecordingSeconds((seconds) => seconds + 1), 1_000);
     return () => window.clearInterval(timer);
   }, [recording]);
+
+  useEffect(() => {
+    const input = contentInput.current;
+    if (!input || preview || note.type !== 'text') return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.max(input.scrollHeight, 230)}px`;
+  }, [note.content, note.type, preview]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -396,6 +404,7 @@ export function NoteEditor({
           <div className="editor-markdown-preview"><MarkdownView value={note.content} /></div>
         ) : (
           <textarea
+            ref={contentInput}
             className="editor-content"
             value={note.content}
             onChange={(event) => onChange({ ...note, content: event.target.value })}
@@ -454,12 +463,12 @@ export function NoteEditor({
                 <button className="toolbar-button" onClick={() => onChange({ ...note, type: 'checklist', items: note.items.length ? note.items : [{ id: crypto.randomUUID(), text: '', checked: false }] })} aria-label={t('editor.checklist')} title={t('editor.checklist')}><ListTodo size={18} /></button>
                 <button className={`toolbar-button ${activePanel === 'reminder' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'reminder' ? null : 'reminder')} aria-label={t('editor.reminder')} title={t('editor.reminder')}><Bell size={18} /></button>
                 <button className="toolbar-button" disabled={offline} onClick={() => fileInput.current?.click()} aria-label={t('editor.attachment')} title={offline ? ui('Çevrimdışıyken dosya eklenemez', 'Attachments are unavailable offline') : t('editor.attachment')}><Paperclip size={18} /><span className="tool-label">{ui('Dosya', 'File')}</span></button>
+                <button className={`toolbar-button ${recording ? 'recording' : ''}`} disabled={offline} onClick={() => void toggleVoice()} aria-label={t('editor.voice')} title={recording ? ui('Kaydı bitir', 'Stop recording') : t('editor.voice')}><Mic size={18} /></button>
                 <input ref={fileInput} hidden multiple type="file" accept="image/*,audio/*,application/pdf,text/plain,text/markdown,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods" onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.target.value = ''; }} />
                 <div ref={moreToolsRef} className={`editor-more-tools ${moreOpen ? 'open' : ''}`}>
                   <button className={`toolbar-button ${activePanel === 'assignee' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'assignee' ? null : 'assignee')} aria-label={t('editor.assignee')} title={t('editor.assignee')}><UserRound size={18} /><span className="more-tool-label">{t('editor.assignee')}</span></button>
                   <button className={`toolbar-button ${activePanel === 'labels' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'labels' ? null : 'labels')} aria-label={t('editor.labels')} title={t('editor.labels')}><Tag size={18} /><span className="more-tool-label">{t('editor.labels')}</span></button>
                   <button className={`toolbar-button ${activePanel === 'color' ? 'active' : ''}`} onClick={() => setActivePanel((panel) => panel === 'color' ? null : 'color')} aria-label={t('editor.color')} title={t('editor.color')}><Palette size={18} /><span className="more-tool-label">{t('editor.color')}</span></button>
-                  <button className={`toolbar-button ${recording ? 'recording' : ''}`} disabled={offline} onClick={() => void toggleVoice()} aria-label={t('editor.voice')} title={recording ? ui('Kaydı bitir', 'Stop recording') : t('editor.voice')}><Mic size={18} /><span className="more-tool-label">{t('editor.voice')}</span></button>
                   {note.type === 'text' && <button className={`toolbar-button ${note.contentFormat === 'markdown' ? 'active' : ''}`} onClick={() => { onChange({ ...note, contentFormat: note.contentFormat === 'markdown' ? 'plain' : 'markdown' }); setPreview(false); }} aria-label="Markdown" title="Markdown"><Code2 size={18} /><span className="more-tool-label">Markdown</span></button>}
                   {note.type === 'text' && note.contentFormat === 'markdown' && <button className={`toolbar-button ${preview ? 'active' : ''}`} onClick={() => setPreview((value) => !value)} aria-label={t('editor.preview')} title={t('editor.preview')}><Eye size={18} /><span className="more-tool-label">{t('editor.preview')}</span></button>}
                   <button className="toolbar-button" disabled={note.version === 0 || offline} onClick={() => void openHistory()} aria-label={ui('Not geçmişi', 'Note history')} title={ui('Not geçmişi', 'Note history')}><History size={18} /><span className="more-tool-label">{ui('Not geçmişi', 'Note history')}</span></button>

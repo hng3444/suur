@@ -250,7 +250,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .editor-upload-feedback svg { flex: 0 0 auto; }.editor-upload-feedback.uploading { color: var(--green-strong); }.editor-upload-feedback.success { border-color: color-mix(in srgb, var(--green) 35%, var(--line)); color: var(--green-strong); }.editor-upload-feedback.error { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); color: var(--danger); }
 .editor-title { display: block; width: 100%; padding: 10px 22px 6px; border: 0; outline: 0; background: transparent; font-size: 21px; font-weight: 740; letter-spacing: -.02em; }
 .editor-title::placeholder, .editor-content::placeholder { color: var(--muted); opacity: .7; }
-.editor-content { display: block; width: 100%; min-height: 230px; resize: vertical; padding: 12px 22px 20px; border: 0; outline: 0; background: transparent; color: var(--text-soft); font-size: 14.5px; line-height: 1.65; }
+.editor-content { display: block; width: 100%; min-height: 230px; overflow: hidden; resize: none; padding: 12px 22px 20px; border: 0; outline: 0; background: transparent; color: var(--text-soft); font-size: 14.5px; line-height: 1.65; }
 .editor-markdown-preview { min-height: 230px; padding: 12px 22px 28px; }
 .checklist-editor { display: grid; gap: 3px; min-height: 160px; padding: 12px 18px 20px; }
 .checklist-row { display: grid; grid-template-columns: 28px 1fr 32px; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
