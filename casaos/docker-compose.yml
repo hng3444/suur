@@ -56,19 +56,19 @@ x-casaos:
     en_US: Suur
     tr_TR: Suur
   tagline:
-    en_US: Fast, private, self-hosted notes that work offline.
-    tr_TR: Hızlı, özel, çevrimdışı çalışan self-hosted notlar.
+    en_US: Fast, private, offline-first self-hosted Google Keep alternative.
+    tr_TR: Hızlı, özel ve çevrimdışı çalışan self-hosted Google Keep alternatifi.
   description:
-    en_US: Suur is a multilingual, offline-first note-taking app with Docker, SQLite, PWA installation, reminders, Markdown, backups, attachments, and multi-user support.
-    tr_TR: Suur; Docker, SQLite, PWA, hatırlatıcılar, Markdown, yedekler, ek dosyalar ve çoklu kullanıcı desteği sunan çevrimdışı öncelikli bir not uygulamasıdır.
+    en_US: Suur is a fast, private, multilingual, offline-first note-taking app and Google Keep alternative for Docker and CasaOS. Features SQLite WAL storage, PWA & native Android app sync, Markdown, checklists, voice notes, file attachments, reminders, version history, multi-user collaboration, Google Keep Takeout import, and automated ZIP backups.
+    tr_TR: Suur; Docker ve CasaOS için geliştirilmiş hızlı, özel, çok dilli ve çevrimdışı öncelikli bir not alma uygulaması ve Google Keep alternatifidir. SQLite WAL depolama, PWA ve Android uygulaması senkronizasyonu, Markdown, yapılacaklar listesi, sesli notlar, dosya ekleri, hatırlatıcılar, sürüm geçmişi, çoklu kullanıcı iş birliği, Google Keep içe aktarma ve otomatik ZIP yedekleme sunar.
   category: Productivity
   author: Suur contributors
   developer: Suur contributors
   architectures:
     - amd64
     - arm64
-  version: "0.3.5"
-  update_at: "2026-09-06"
+  version: "0.3.6"
+  update_at: "2026-11-18"
   website: https://github.com/hng3444/suur
   repo: https://github.com/hng3444/suur
   support: https://github.com/hng3444/suur/issues

@@ -1,17 +1,24 @@
 {
   "name": "suur",
-  "version": "0.3.5",
-  "description": "A fast, private, multilingual, self-hosted notes app with offline-first PWA support.",
+  "version": "0.3.6",
+  "description": "Fast, private, offline-first, self-hosted Google Keep alternative with Docker, CasaOS, SQLite, Markdown, voice notes, and native Android sync.",
   "keywords": [
     "self-hosted",
     "notes",
     "note-taking",
-    "pwa",
+    "google-keep-alternative",
     "offline-first",
+    "local-first",
+    "pwa",
     "docker",
     "casaos",
-    "google-keep-alternative",
-    "sqlite"
+    "homelab",
+    "sqlite",
+    "markdown",
+    "privacy",
+    "android",
+    "capacitor",
+    "nextjs"
   ],
   "homepage": "https://github.com/hng3444/suur",
   "repository": {

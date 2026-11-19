@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const format = request.nextUrl.searchParams.get('format') || 'backup';
   const timestamp = new Date().toISOString().slice(0, 10);
   if (format === 'json') return new NextResponse(exportJson(user.id), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="suur-export-${timestamp}.json"`, 'Cache-Control': 'no-store' } });
-  if (format === 'markdown' || format === 'txt') return new NextResponse(exportTextArchive(user.id, format), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="suur-${format}-${timestamp}.zip"`, 'Cache-Control': 'no-store' } });
+  if (format === 'markdown' || format === 'txt') return new NextResponse(await exportTextArchive(user.id, format), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="suur-${format}-${timestamp}.zip"`, 'Cache-Control': 'no-store' } });
   if (format === 'backup') return new NextResponse(await createBackupBytes(user.id), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="suur-backup-${timestamp}.zip"`, 'Cache-Control': 'no-store' } });
   return jsonError('Unsupported export format.', 400);
 }

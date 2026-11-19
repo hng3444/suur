@@ -3,10 +3,11 @@ name: Publish Docker image
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -58,6 +59,10 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest
+            type=raw,value=v0.3.6
+            type=raw,value=0.3.6
+            type=semver,pattern=v{{version}}
+            type=semver,pattern={{version}}
             type=sha,prefix=sha-
 
       - name: Build and publish image
@@ -70,3 +75,15 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="v$(node -p "require('./package.json').version")"
+          NOTES="Suur ${VERSION} — Multi-arch Docker image (\`ghcr.io/${GITHUB_REPOSITORY}:${VERSION}\` & \`ghcr.io/${GITHUB_REPOSITORY}:latest\`), Web conflict-copy preservation, shared-note authorization, default welcome tutorial notes, async ZIP backup engine, and Docker hardening."
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            gh release edit "${VERSION}" --title "Suur ${VERSION}" --notes "${NOTES}" --latest
+          else
+            gh release create "${VERSION}" --target "${GITHUB_SHA}" --title "Suur ${VERSION}" --notes "${NOTES}" --latest
+          fi

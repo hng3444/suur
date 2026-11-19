@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, unzip } from 'fflate';
 import { getDb, uploadsDirectory } from '@/lib/db';
 import { addAttachment, createLabel, createNote, listLabels } from '@/lib/repository';
 import type { NoteColor } from '@/lib/types';
@@ -51,15 +51,22 @@ export async function importGoogleKeep(file: File, userId: string) {
   if (file.name.toLowerCase().endsWith('.zip') || file.type.includes('zip')) {
     let entryCount = 0;
     let expandedBytes = 0;
-    Object.assign(entries, unzipSync(bytes, { filter: (entry) => {
-      entryCount += 1;
-      expandedBytes += entry.originalSize;
-      if (entryCount > 10_000 || expandedBytes > 250 * 1024 * 1024 || entry.originalSize > 25 * 1024 * 1024) {
-        throw new Error('Takeout arşivi güvenli boyut sınırlarını aşıyor.');
+    const unpacked = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+      try {
+        unzip(bytes, { filter: (entry) => {
+          entryCount += 1;
+          expandedBytes += entry.originalSize;
+          if (entryCount > 10_000 || expandedBytes > 250 * 1024 * 1024 || entry.originalSize > 25 * 1024 * 1024) {
+            throw new Error('Takeout arşivi güvenli boyut sınırlarını aşıyor.');
+          }
+          const extension = path.extname(entry.name).toLowerCase();
+          return extension === '.json' || Boolean(imageTypes[extension]);
+        } }, (error, data) => error ? reject(error) : resolve(data));
+      } catch (error) {
+        reject(error);
       }
-      const extension = path.extname(entry.name).toLowerCase();
-      return extension === '.json' || Boolean(imageTypes[extension]);
-    } }));
+    });
+    Object.assign(entries, unpacked);
   } else if (file.name.toLowerCase().endsWith('.json') || file.type === 'application/json') {
     entries[file.name] = bytes;
   } else throw new Error('Google Keep Takeout ZIP veya JSON dosyası seçin.');

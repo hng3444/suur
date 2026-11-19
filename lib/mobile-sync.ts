@@ -1,6 +1,7 @@
 import { mobileAuthorization, mobileEndpoint, normalizeServerUrl } from './mobile-client.ts';
 import { MOBILE_API_VERSION, type MobileSyncDelta, type MobileSyncResponse, type MobileSyncSnapshot } from './mobile-protocol.ts';
-import { compactOperations, type QueuedOperation } from './offline.ts';
+import { compactOperations, createConflictCopy, type QueuedOperation } from './offline.ts';
+export { createConflictCopy };
 import { syncDecision } from './sync-policy.ts';
 import type { AppSettings, Label, Note } from './types.ts';
 
@@ -172,26 +173,6 @@ async function sendOperation(baseUrl: string, token: string, operation: MobilePe
     redirect: 'manual',
   });
   return { response, body: await responseBody(response) };
-}
-
-export function createConflictCopy(operation: MobilePendingOperation): MobilePendingOperation | null {
-  if (operation.method !== 'PATCH' || !/^\/api\/notes\/[A-Za-z0-9_-]{1,80}$/.test(operation.url)) return null;
-  if (!operation.body || typeof operation.body !== 'object' || Array.isArray(operation.body)) return null;
-  const safeId = operation.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 65);
-  if (!safeId) return null;
-  const body = { ...(operation.body as Record<string, unknown>) };
-  delete body.baseVersion;
-  const title = typeof body.title === 'string' ? body.title.trim() : '';
-  body.id = `conflict_${safeId}`.slice(0, 80);
-  body.title = `${title || 'Offline note'} (offline copy)`.slice(0, 500);
-  body.assignedUserId = null;
-  return {
-    id: `conflict_${safeId}`.slice(0, 100),
-    method: 'POST',
-    url: '/api/notes',
-    body,
-    createdAt: operation.createdAt,
-  };
 }
 
 async function pushMobileQueue(input: {

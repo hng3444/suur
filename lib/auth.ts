@@ -140,16 +140,29 @@ export function revokeSessionToken(token: string) {
 const globalLimiter = globalThis as unknown as { suurLoginAttempts?: Map<string, { count: number; resetAt: number }> };
 const loginAttempts = globalLimiter.suurLoginAttempts ?? new Map();
 globalLimiter.suurLoginAttempts = loginAttempts;
+const MAX_LOGIN_ATTEMPT_ENTRIES = 10_000;
 const dummyPasswordHash = 'scrypt$16384$8$1$8cbb4e6c64380641afce209f81987bf9$9c23b68a76fc1922873c9f0a3b6b275a1ce02d3353a35a7a0bb88ac1c0cd3a7d870f24e7bd0ae9ae4e92768a44536ab1c739f36f86731323e0f65cf6c77dc282';
+
+function pruneLoginAttempts(now: number) {
+  if (loginAttempts.size < MAX_LOGIN_ATTEMPT_ENTRIES) return;
+  for (const [key, entry] of loginAttempts) {
+    if (entry.resetAt <= now) loginAttempts.delete(key);
+  }
+  while (loginAttempts.size >= MAX_LOGIN_ATTEMPT_ENTRIES) {
+    const oldestKey = loginAttempts.keys().next().value;
+    if (!oldestKey) break;
+    loginAttempts.delete(oldestKey);
+  }
+}
 
 export async function authenticateCredentials(request: Request, username: string, password: string): Promise<
   { ok: true; user: User } | { ok: false; status: 401 | 429; message: string; code: 'INVALID_CREDENTIALS' | 'TOO_MANY_ATTEMPTS' }
 > {
   const trustProxy = process.env.SUUR_TRUST_PROXY === 'true';
   const forwarded = trustProxy
-    ? request.headers.get('cf-connecting-ip')
-      || request.headers.get('x-real-ip')
-      || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    ? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')?.trim()
+      || request.headers.get('cf-connecting-ip')?.trim()
       || 'proxy'
     : 'all-clients';
   const key = `${forwarded}:${username.toLocaleLowerCase('en-US')}`;
@@ -163,6 +176,7 @@ export async function authenticateCredentials(request: Request, username: string
   const row = findUserByUsername(username);
   const passwordValid = await verifyPassword(password, row?.password_hash || dummyPasswordHash);
   if (!row || !passwordValid) {
+    pruneLoginAttempts(now);
     const next = loginAttempts.get(key) || { count: 0, resetAt: now + 15 * 60_000 };
     next.count += 1;
     loginAttempts.set(key, next);

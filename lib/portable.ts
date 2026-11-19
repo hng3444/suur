@@ -2,7 +2,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzip, zip, type ZipOptions } from 'fflate';
 import { dataDirectory, uploadsDirectory } from '@/lib/db';
 import {
   addAttachment,
@@ -68,7 +68,23 @@ function noteText(note: Note, markdown: boolean) {
   return markdown ? `# ${title}\n\n${content}${labels}${reminder}\n` : `${title}\n${'='.repeat(Math.min(title.length, 70))}\n\n${content}${labels}${reminder}\n`;
 }
 
-export function exportTextArchive(userId: string, format: 'markdown' | 'txt') {
+function zipArchive(files: Record<string, Uint8Array>, options: ZipOptions = { level: 6 }) {
+  return new Promise<Buffer<ArrayBuffer>>((resolve, reject) => {
+    zip(files, options, (error, data) => error ? reject(error) : resolve(Buffer.from(data)));
+  });
+}
+
+function unzipArchive(bytes: Uint8Array, filter: (file: { name: string; originalSize: number }) => boolean) {
+  return new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+    try {
+      unzip(bytes, { filter }, (error, data) => error ? reject(error) : resolve(data));
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+export async function exportTextArchive(userId: string, format: 'markdown' | 'txt') {
   const files: Record<string, Uint8Array> = {};
   for (const note of listAllOwnedNotes(userId)) {
     const extension = format === 'markdown' ? 'md' : 'txt';
@@ -76,7 +92,7 @@ export function exportTextArchive(userId: string, format: 'markdown' | 'txt') {
     files[filename] = strToU8(noteText(note, format === 'markdown'));
   }
   if (!Object.keys(files).length) files[`README.${format === 'markdown' ? 'md' : 'txt'}`] = strToU8('No notes were found.\n');
-  return Buffer.from(zipSync(files, { level: 6 }));
+  return zipArchive(files);
 }
 
 export async function createBackupBytes(userId: string) {
@@ -94,7 +110,7 @@ export async function createBackupBytes(userId: string) {
     }
   }
   files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
-  return Buffer.from(zipSync(files, { level: 6 }));
+  return zipArchive(files);
 }
 
 function normalizeImportedNotes(value: unknown): { labels: Label[]; notes: Note[] } {
@@ -174,9 +190,10 @@ export function importJson(bytes: Uint8Array, userId: string) {
 export function importMarkdown(bytes: Uint8Array, filename: string, userId: string) {
   const text = strFromU8(bytes).slice(0, 100_000);
   const lines = text.split(/\r?\n/);
-  const heading = lines.find((line) => /^#\s+/.test(line));
+  const headingIndex = lines.findIndex((line) => /^#\s+/.test(line));
+  const heading = headingIndex >= 0 ? lines[headingIndex] : undefined;
   const title = heading ? heading.replace(/^#\s+/, '').trim() : path.basename(filename, path.extname(filename));
-  const content = heading ? lines.filter((line) => line !== heading).join('\n').trim() : text;
+  const content = headingIndex >= 0 ? lines.filter((_, index) => index !== headingIndex).join('\n').trim() : text;
   createNote({ title: title.slice(0, 500), content, contentFormat: 'markdown' }, null, userId);
   return 1;
 }
@@ -186,18 +203,16 @@ export async function importBackup(bytes: Uint8Array, userId: string, quotaMb: n
   const maxExpandedBytes = Math.min(256 * mebibyte, Math.max(10 * mebibyte, quotaMb * mebibyte + 5 * mebibyte));
   let expandedBytes = 0;
   let fileCount = 0;
-  const archive = unzipSync(bytes, {
-    filter: (file) => {
-      const allowed = file.name === 'manifest.json'
-        || (file.name.startsWith('attachments/') && !file.name.includes('..') && !file.name.includes('\\'));
-      if (!allowed) return false;
-      fileCount += 1;
-      expandedBytes += file.originalSize;
-      if (fileCount > 10_001 || file.originalSize > 25 * mebibyte || expandedBytes > maxExpandedBytes) {
-        throw new Error('The backup expands beyond the safe import limit.');
-      }
-      return true;
-    },
+  const archive = await unzipArchive(bytes, (file) => {
+    const allowed = file.name === 'manifest.json'
+      || (file.name.startsWith('attachments/') && !file.name.includes('..') && !file.name.includes('\\'));
+    if (!allowed) return false;
+    fileCount += 1;
+    expandedBytes += file.originalSize;
+    if (fileCount > 10_001 || file.originalSize > 25 * mebibyte || expandedBytes > maxExpandedBytes) {
+      throw new Error('The backup expands beyond the safe import limit.');
+    }
+    return true;
   });
   const manifestBytes = archive['manifest.json'];
   if (!manifestBytes) throw new Error('Backup manifest is missing.');

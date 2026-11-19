@@ -59,6 +59,20 @@ test('offline autosaves for one note are compacted into one operation', () => {
   assert.deepEqual(operations[0].body, { id: 'note-1', title: 'abc', content: 'abc' });
 });
 
+test('offline label and settings mutations are compacted safely', () => {
+  const operations = compactOperations([
+    { id: 'l-create', method: 'POST', url: '/api/labels', body: { id: 'label-1', name: 'W', color: '#ff6a00' }, createdAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'l-patch-1', method: 'PATCH', url: '/api/labels/label-1', body: { name: 'Wo' }, createdAt: '2026-01-01T00:00:01.000Z' },
+    { id: 'l-patch-2', method: 'PATCH', url: '/api/labels/label-1', body: { name: 'Work', color: '#1971c2' }, createdAt: '2026-01-01T00:00:02.000Z' },
+    { id: 's-1', method: 'PATCH', url: '/api/settings', body: { theme: 'dark' }, createdAt: '2026-01-01T00:00:03.000Z' },
+    { id: 's-2', method: 'PATCH', url: '/api/settings', body: { view: 'list' }, createdAt: '2026-01-01T00:00:04.000Z' },
+  ]);
+
+  assert.equal(operations.length, 2);
+  assert.deepEqual(operations[0].body, { id: 'label-1', name: 'Work', color: '#1971c2' });
+  assert.deepEqual(operations[1].body, { theme: 'dark', view: 'list' });
+});
+
 test('online autosave patches keep the original base version and newest content', () => {
   const operations = compactOperations([
     { id: 'patch-1', method: 'PATCH', url: '/api/notes/note-1', body: { title: 'a', baseVersion: 4 }, createdAt: '2026-01-01T00:00:00.000Z' },

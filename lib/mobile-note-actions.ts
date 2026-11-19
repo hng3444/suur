@@ -97,8 +97,15 @@ export function createNoteOperation(note: Note): MobilePendingOperation {
   };
 }
 
-export function updateNoteOperation(note: Note): MobilePendingOperation {
-  const body = Object.fromEntries(Object.entries(noteWriteBody(note)).filter(([key]) => key !== 'id'));
+export function updateNoteOperation(note: Note, currentUserId?: string): MobilePendingOperation {
+  const isOwner = !currentUserId || note.ownerId === currentUserId;
+  const body = Object.fromEntries(
+    Object.entries(noteWriteBody(note)).filter(([key]) => {
+      if (key === 'id') return false;
+      if (!isOwner && (key === 'labelIds' || key === 'assignedUserId' || key === 'trashedAt')) return false;
+      return true;
+    }),
+  );
   return {
     id: randomId('mutation'),
     method: 'PATCH',
@@ -196,7 +203,7 @@ export function visibleMobileNotes(state: MobileLocalState, view: NoteView, sear
     const inView = view === 'trash' ? Boolean(note.trashedAt)
       : view === 'archive' ? note.archived && !note.trashedAt
         : view === 'reminders' ? Boolean(note.reminderAt) && !note.archived && !note.trashedAt
-          : view === 'shared' ? note.ownerId !== state.userId && !note.trashedAt
+          : view === 'shared' ? (note.ownerId !== state.userId || Boolean(note.assignedUserId)) && !note.archived && !note.trashedAt
             : !note.archived && !note.trashedAt;
     if (!inView) return false;
     if (!query) return true;

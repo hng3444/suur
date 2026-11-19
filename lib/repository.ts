@@ -279,6 +279,11 @@ export function recordMutation(id: string | null, entityId: string, action: stri
   ).run(id, userId, entityId, action, now());
 }
 
+function existingUserId(userId: string | null | undefined) {
+  if (!userId) return null;
+  return getDb().prepare('SELECT 1 FROM users WHERE id = ?').get(userId) ? userId : null;
+}
+
 export function createNote(input: NoteInput, mutation: string | null, userId: string) {
   const database = getDb();
   const id = input.id || randomUUID();
@@ -299,6 +304,7 @@ export function createNote(input: NoteInput, mutation: string | null, userId: st
       'SELECT COALESCE(MIN(position), 1024) - 1024 AS position FROM notes WHERE user_id = ? AND trashed_at IS NULL',
     ).get(userId) as { position: number }).position;
 
+    const assignedUserId = existingUserId(input.assignedUserId);
     database.prepare(`
       INSERT INTO notes (
         id, user_id, assigned_user_id, title, content, content_format, type, items_json, color, pinned, archived,
@@ -307,7 +313,7 @@ export function createNote(input: NoteInput, mutation: string | null, userId: st
     `).run(
       id,
       userId,
-      input.assignedUserId ?? null,
+      assignedUserId,
       input.title ?? '',
       input.content ?? '',
       input.contentFormat ?? 'plain',
@@ -323,7 +329,7 @@ export function createNote(input: NoteInput, mutation: string | null, userId: st
       updatedAt,
     );
     setNoteLabels(id, input.labelIds ?? [], userId);
-    recordNoteAudienceChange(id, userId, input.assignedUserId ?? null, 'upsert');
+    recordNoteAudienceChange(id, userId, assignedUserId, 'upsert');
     recordMutation(mutation, id, 'create', userId);
   });
   transaction();
@@ -352,6 +358,7 @@ export function updateNote(id: string, input: NoteInput, mutation: string | null
     `).run(id, id, historyLimit);
     const assignments: string[] = [];
     const values: unknown[] = [];
+    const isOwner = current.ownerId === userId;
     const mappings: Array<[keyof NoteInput, string, (value: unknown) => unknown]> = [
       ['title', 'title', (value) => value],
       ['content', 'content', (value) => value],
@@ -361,14 +368,18 @@ export function updateNote(id: string, input: NoteInput, mutation: string | null
       ['color', 'color', (value) => value],
       ['pinned', 'pinned', (value) => value ? 1 : 0],
       ['archived', 'archived', (value) => value ? 1 : 0],
-      ['trashedAt', 'trashed_at', (value) => value],
       ['reminderAt', 'reminder_at', (value) => value],
       ['position', 'position', (value) => value],
     ];
 
-    if (input.assignedUserId !== undefined && current.ownerId === userId) {
+    if (isOwner && input.trashedAt !== undefined) {
+      assignments.push('trashed_at = ?');
+      values.push(input.trashedAt);
+    }
+
+    if (input.assignedUserId !== undefined && isOwner) {
       assignments.push('assigned_user_id = ?');
-      values.push(input.assignedUserId);
+      values.push(existingUserId(input.assignedUserId));
     }
 
     for (const [key, column, transform] of mappings) {
@@ -378,7 +389,7 @@ export function updateNote(id: string, input: NoteInput, mutation: string | null
       }
     }
 
-    if (input.labelIds !== undefined) setNoteLabels(id, input.labelIds, current.ownerId);
+    if (input.labelIds !== undefined && isOwner) setNoteLabels(id, input.labelIds, current.ownerId);
     assignments.push('version = version + 1', 'updated_at = ?');
     values.push(now(), id, userId, userId);
     database.prepare(`UPDATE notes SET ${assignments.join(', ')} WHERE id = ? AND (user_id = ? OR assigned_user_id = ?)`).run(...values);
@@ -707,7 +718,7 @@ export function restoreNoteVersion(noteId: string, historyId: string, userId: st
     archived: snapshot.archived,
     trashedAt: snapshot.trashedAt,
     reminderAt: snapshot.reminderAt,
-    assignedUserId: snapshot.assignedUserId,
+    assignedUserId: existingUserId(snapshot.assignedUserId),
     labelIds: snapshot.labels.map((label) => label.id),
     baseVersion: current.version,
   }, null, userId).note;

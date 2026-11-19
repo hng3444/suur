@@ -24,6 +24,15 @@ function noteId(operation: QueuedOperation) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function labelId(operation: QueuedOperation) {
+  if (operation.method === 'POST' && operation.url === '/api/labels') {
+    const id = bodyRecord(operation)?.id;
+    return typeof id === 'string' ? id : null;
+  }
+  const match = operation.url.match(/^\/api\/labels\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 const validId = /^[a-zA-Z0-9_-]{1,80}$/;
 const noteColors = new Set(['default', 'mint', 'sage', 'sand', 'rose', 'sky', 'lavender']);
 
@@ -85,6 +94,56 @@ export function compactOperations(operations: QueuedOperation[]) {
       continue;
     }
 
+    if (operation.method === 'PATCH' && operation.url === '/api/settings') {
+      const existing = result.findIndex((item) => item.method === 'PATCH' && item.url === '/api/settings');
+      if (existing >= 0) {
+        result[existing] = {
+          ...result[existing],
+          body: { ...bodyRecord(result[existing]), ...bodyRecord(operation) },
+        };
+      } else result.push(operation);
+      continue;
+    }
+
+    const currentLabelId = labelId(operation);
+    if (currentLabelId) {
+      const pendingCreate = result.findIndex((item) => item.method === 'POST' && item.url === '/api/labels' && labelId(item) === currentLabelId);
+      const pendingPatch = result.findIndex((item) => item.method === 'PATCH' && labelId(item) === currentLabelId);
+      const pendingDelete = result.findIndex((item) => item.method === 'DELETE' && labelId(item) === currentLabelId);
+
+      if (operation.method === 'POST') {
+        if (pendingCreate >= 0) {
+          result[pendingCreate] = {
+            ...result[pendingCreate],
+            body: { ...bodyRecord(result[pendingCreate]), ...bodyRecord(operation) },
+          };
+        } else result.push(operation);
+        continue;
+      }
+
+      if (operation.method === 'PATCH') {
+        if (pendingDelete >= 0) continue;
+        if (pendingCreate >= 0) {
+          result[pendingCreate] = {
+            ...result[pendingCreate],
+            body: { ...bodyRecord(result[pendingCreate]), ...bodyRecord(operation) },
+          };
+        } else if (pendingPatch >= 0) {
+          result[pendingPatch] = {
+            ...result[pendingPatch],
+            body: { ...bodyRecord(result[pendingPatch]), ...bodyRecord(operation) },
+          };
+        } else result.push(operation);
+        continue;
+      }
+
+      if (pendingPatch >= 0) result.splice(pendingPatch, 1);
+      const duplicateDelete = result.findIndex((item) => item.method === 'DELETE' && labelId(item) === currentLabelId);
+      if (duplicateDelete >= 0) result[duplicateDelete] = operation;
+      else result.push(operation);
+      continue;
+    }
+
     const id = noteId(operation);
     if (!id) {
       result.push(operation);
@@ -138,6 +197,26 @@ export function compactOperations(operations: QueuedOperation[]) {
     else result.push(operation);
   }
   return result;
+}
+
+export function createConflictCopy(operation: QueuedOperation): QueuedOperation | null {
+  if (operation.method !== 'PATCH' || !/^\/api\/notes\/[A-Za-z0-9_-]{1,80}$/.test(operation.url)) return null;
+  if (!operation.body || typeof operation.body !== 'object' || Array.isArray(operation.body)) return null;
+  const safeId = operation.id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 65);
+  if (!safeId) return null;
+  const body = { ...(operation.body as Record<string, unknown>) };
+  delete body.baseVersion;
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  body.id = `conflict_${safeId}`.slice(0, 80);
+  body.title = `${title || 'Offline note'} (offline copy)`.slice(0, 500);
+  body.assignedUserId = null;
+  return {
+    id: `conflict_${safeId}`.slice(0, 100),
+    method: 'POST',
+    url: '/api/notes',
+    body,
+    createdAt: operation.createdAt,
+  };
 }
 
 function openDatabase() {

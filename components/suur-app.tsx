@@ -31,7 +31,7 @@ import { SettingsCenter } from '@/components/settings-center';
 import { ConfirmDialog, ShareDialog } from '@/components/app-dialogs';
 import { BrandMark } from '@/components/brand-mark';
 import { useWebBackLayer } from '@/components/use-web-back-layer';
-import { enqueue, getCache, queuedOperations, removeQueuedOperation, setCache, setOfflineNamespace, type QueuedOperation } from '@/lib/offline';
+import { createConflictCopy, enqueue, getCache, queuedOperations, removeQueuedOperation, setCache, setOfflineNamespace, type QueuedOperation } from '@/lib/offline';
 import { languageDirection, translate } from '@/lib/i18n';
 import { hasActiveFilters, reconcileEditorSave, sortNotes } from '@/lib/client-utils';
 import { syncDecision } from '@/lib/sync-policy';
@@ -78,8 +78,9 @@ function createDraft(ownerId = ''): Note {
   };
 }
 
-function notePayload(note: Note) {
-  return {
+function notePayload(note: Note, currentUserId?: string) {
+  const isOwner = !currentUserId || !note.ownerId || note.ownerId === currentUserId;
+  const payload: Record<string, unknown> = {
     title: note.title,
     content: note.content,
     contentFormat: note.contentFormat,
@@ -88,12 +89,15 @@ function notePayload(note: Note) {
     color: note.color,
     pinned: note.pinned,
     archived: note.archived,
-    trashedAt: note.trashedAt,
     reminderAt: note.reminderAt,
     position: note.position,
-    labelIds: note.labels.map((label) => label.id),
-    assignedUserId: note.assignedUserId,
   };
+  if (isOwner) {
+    payload.trashedAt = note.trashedAt;
+    payload.labelIds = note.labels.map((label) => label.id);
+    payload.assignedUserId = note.assignedUserId;
+  }
+  return payload;
 }
 
 async function rawOperation(operation: QueuedOperation) {
@@ -220,16 +224,31 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
   }, []);
 
   const retryVersionConflict = useCallback(async (operation: QueuedOperation, data: unknown) => {
-    if (operation.method !== 'PATCH' || !operation.url.match(/^\/api\/notes\/[^/]+$/)) return null;
+    const conflictCopy = createConflictCopy(operation);
+    if (!conflictCopy) return null;
     const serverNote = (data as { note?: Note })?.note;
-    if (!serverNote || !operation.body || typeof operation.body !== 'object' || Array.isArray(operation.body)) return null;
-    const rebased: QueuedOperation = {
-      ...operation,
-      id: crypto.randomUUID(),
-      body: { ...(operation.body as Record<string, unknown>), baseVersion: serverNote.version },
-      createdAt: new Date().toISOString(),
-    };
-    return { ...(await rawOperation(rebased)), operation: rebased };
+    if (serverNote) {
+      setNotes((current) => current.map((note) => note.id === serverNote.id ? serverNote : note));
+    }
+    const result = await rawOperation(conflictCopy);
+    if (result.response.ok) {
+      const copyNote = (result.data as { note?: Note })?.note;
+      if (copyNote) {
+        setNotes((current) => current.some((note) => note.id === copyNote.id) ? current : [copyNote, ...current]);
+      }
+      if (serverNote) {
+        setEditorNote((current) => {
+          if (!current || current.id !== serverNote.id) return current;
+          if (copyNote) {
+            editorRef.current = copyNote;
+            return copyNote;
+          }
+          editorRef.current = serverNote;
+          return serverNote;
+        });
+      }
+    }
+    return { ...result, operation: conflictCopy, serverNote };
   }, []);
 
   const recoverMissingNote = useCallback(async (operation: QueuedOperation) => {
@@ -265,8 +284,9 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
         const retry = await retryVersionConflict(operation, data);
         if (retry) {
           response = retry.response;
-          data = retry.data;
+          data = retry.serverNote ? { note: retry.serverNote } : retry.data;
           decision = syncDecision(response.status);
+          if (!response.ok) operation = retry.operation;
         }
       }
       if (!response.ok) {
@@ -572,8 +592,8 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
       method: isNew ? 'POST' : 'PATCH',
       url: isNew ? '/api/notes' : `/api/notes/${current.id}`,
       body: isNew
-        ? { id: current.id, ...notePayload(current) }
-        : { ...notePayload(current), baseVersion: current.version },
+        ? { id: current.id, ...notePayload(current, currentUser.id) }
+        : { ...notePayload(current, currentUser.id), baseVersion: current.version },
       createdAt: new Date().toISOString(),
     };
 
@@ -587,7 +607,7 @@ export function SuurApp({ initialUser, initialBranding }: { initialUser: User; i
       setSaveStatus(result ? translate(settings.locale, 'status.saved') : `${translate(settings.locale, 'status.offline')} · ${translate(settings.locale, 'status.saved')}`);
     });
     await saveChain.current;
-  }, [dispatchOperation, mergeServerNote, settings.locale]);
+  }, [currentUser.id, dispatchOperation, mergeServerNote, settings.locale]);
 
   const changeEditor = (note: Note) => {
     editorRevisionRef.current += 1;

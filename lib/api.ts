@@ -15,6 +15,9 @@ export function handleApiError(error: unknown) {
   if (error instanceof Error && error.message.includes('UNIQUE constraint failed: users.username')) {
     return jsonError('Bu kullanıcı adı zaten kullanılıyor.', 409);
   }
+  if (error instanceof Error && error.message.includes('FOREIGN KEY constraint failed')) {
+    return jsonError('İlişkili kayıt bulunamadı veya geçersiz.', 422);
+  }
   if (error instanceof Error && error.message === 'NOTE_LIMIT_REACHED') {
     return jsonError('Kullanıcı için izin verilen azami not sayısına ulaşıldı.', 413);
   }

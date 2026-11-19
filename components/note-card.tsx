@@ -147,7 +147,7 @@ export function NoteCard({
               <button title={note.archived ? t('unarchive') : t('archive')} aria-label={note.archived ? t('unarchive') : t('archive')} onClick={() => onPatch(note, { archived: !note.archived }, true)}>
                 {note.archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
               </button>
-              <button title={t('moveTrash')} aria-label={t('moveTrash')} onClick={() => onPatch(note, { trashedAt: new Date().toISOString() }, true)}><Trash2 size={16} /></button>
+              {note.ownerId === currentUserId && <button title={t('moveTrash')} aria-label={t('moveTrash')} onClick={() => onPatch(note, { trashedAt: new Date().toISOString() }, true)}><Trash2 size={16} /></button>}
             </>
           )}
         </div>

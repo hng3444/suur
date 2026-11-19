@@ -26,7 +26,7 @@ ENV NODE_ENV=production \
 RUN apt-get update \
   && apt-get install -y --no-install-recommends gosu \
   && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /data/uploads/profiles \
+  && mkdir -p /data/uploads/profiles /data/uploads/branding /data/backups \
   && chown -R node:node /data
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static

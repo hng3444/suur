@@ -115,6 +115,107 @@ function migrateLabelUniqueness(database: Database.Database) {
   if (violations.length) throw new Error('Etiket veritabanı geçişi bütünlük kontrolünü geçemedi.');
 }
 
+function seedWelcomeNotes(database: Database.Database, userId: string, timestamp: string) {
+  const existingNotes = (database.prepare('SELECT COUNT(*) AS count FROM notes').get() as { count: number }).count;
+  if (existingNotes > 0) return;
+
+  const insertNote = database.prepare(`
+    INSERT INTO notes (
+      id, user_id, assigned_user_id, title, content, content_format, type, items_json, color, pinned, archived,
+      trashed_at, reminder_at, position, version, created_at, updated_at
+    ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, ?, 1, ?, ?)
+  `);
+  const bumpSyncClock = database.prepare('UPDATE sync_clock SET sequence = sequence + 1 WHERE id = 1 RETURNING sequence');
+  const insertSyncChange = database.prepare(`
+    INSERT INTO sync_changes (user_id, entity_type, entity_id, operation, sequence, changed_at)
+    VALUES (?, 'note', ?, 'upsert', ?, ?)
+  `);
+
+  const welcomeNotes = [
+    {
+      id: randomUUID(),
+      title: '🔥 Suur’a Hoş Geldiniz! / Welcome to Suur!',
+      content: [
+        '## Özel ve Çevrimdışı Öncelikli Not Alanınız',
+        'Suur; notlarınızı, etiketlerinizi, ses kayıtlarınızı ve dosyalarınızı tamamen **kendi sunucunuzda** tutan hızlı ve modern bir not uygulamasıdır.',
+        '',
+        '- **Çevrimdışı Çalışır:** İnternet kesilse bile not yazmaya devam edin; bağlantı geldiğinde otomatik senkronize olur.',
+        '- **Zengin İçerik:** Düz metin, **Markdown**, yapılacaklar listesi (checklist), görsel, ses kaydı ve dosya ekleri.',
+        '- **Güvenli Paylaşım:** Tek tıkla salt-okunur genel bağlantı oluşturun veya sunucudaki başka bir kullanıcıya not atayın.',
+        '',
+        '---',
+        '## Your Private, Offline-First Workspace',
+        'Suur keeps your notes, labels, voice memos, and files **100% on your own server** with instant offline sync across Web, PWA, and Android.',
+      ].join('\n'),
+      contentFormat: 'markdown',
+      type: 'text',
+      items: [],
+      color: 'sand',
+      pinned: 1,
+      position: 0,
+    },
+    {
+      id: randomUUID(),
+      title: '🚀 İlk Adımlar / Quick Start Checklist',
+      content: '',
+      contentFormat: 'plain',
+      type: 'checklist',
+      items: [
+        { id: randomUUID(), text: 'Ayarlar → Profil bölümünden varsayılan şifrenizi güncellediniz / Change default password in Settings → Profile', checked: true },
+        { id: randomUUID(), text: 'Sol menüden yeni bir etiket oluşturun ve renklendirin / Create a color-coded label from the sidebar', checked: false },
+        { id: randomUUID(), text: 'Bu notun rengini değiştirmeyi veya bir dosya sürükleyip bırakmayı deneyin / Try changing this note’s color or dropping a file', checked: false },
+        { id: randomUUID(), text: 'Ayarlar → Veri ve Yedek bölümünden otomatik yedeklemeyi açın / Enable automatic backups in Settings → Data & backup', checked: false },
+        { id: randomUUID(), text: 'Tarayıcıdan PWA olarak yükleyin veya Android uygulamasını bağlayın / Install as a PWA or connect the Android app', checked: false },
+      ],
+      color: 'mint',
+      pinned: 1,
+      position: 1024,
+    },
+    {
+      id: randomUUID(),
+      title: '💡 İpuçları, Kısayollar ve Markdown / Tips & Shortcuts',
+      content: [
+        '### Klavye Kısayolları / Keyboard Shortcuts',
+        '- `N` → Yeni not oluştur / Create a new note',
+        '- `/` → Arama kutusuna odaklan / Focus search & filters',
+        '- `Ctrl/Cmd + Enter` veya `Esc` → Notu kaydet ve kapat / Save & close note',
+        '',
+        '### Markdown & Sürüm Geçmişi / Markdown & Version History',
+        'Not düzenleyicide `</>` (**Markdown**) düğmesine basarak başlıklar, kod blokları ve bağlantılar kullanabilirsiniz. Yanlışlıkla bir şey silerseniz **Not Geçmişi (History)** menüsünden önceki 100 sürümden herhangi birine tek tıkla geri dönebilirsiniz.',
+        '',
+        '> Bu başlangıç notlarını istediğiniz zaman düzenleyebilir veya çöp kutusuna taşıyabilirsiniz.',
+      ].join('\n'),
+      contentFormat: 'markdown',
+      type: 'text',
+      items: [],
+      color: 'sky',
+      pinned: 0,
+      position: 2048,
+    },
+  ] as const;
+
+  database.transaction(() => {
+    for (const note of welcomeNotes) {
+      insertNote.run(
+        note.id,
+        userId,
+        note.title,
+        note.content,
+        note.contentFormat,
+        note.type,
+        JSON.stringify(note.items),
+        note.color,
+        note.pinned,
+        note.position,
+        timestamp,
+        timestamp,
+      );
+      const { sequence } = bumpSyncClock.get() as { sequence: number };
+      insertSyncChange.run(userId, note.id, sequence, timestamp);
+    }
+  })();
+}
+
 function initializeDatabase() {
   mkdirSync(profileUploadsDirectory(), { recursive: true });
   mkdirSync(brandingUploadsDirectory(), { recursive: true });
@@ -274,7 +375,9 @@ function initializeDatabase() {
 
   const timestamp = new Date().toISOString();
   let defaultUser = database.prepare('SELECT id FROM users ORDER BY created_at LIMIT 1').get() as { id: string } | undefined;
+  let isFreshInstall = false;
   if (!defaultUser) {
+    isFreshInstall = true;
     const id = randomUUID();
     database.prepare(`
       INSERT INTO users (id, username, display_name, password_hash, role, must_change_password, created_at, updated_at)
@@ -292,6 +395,9 @@ function initializeDatabase() {
   }
 
   ensureRuntimeSchema(database);
+  if (isFreshInstall) {
+    seedWelcomeNotes(database, defaultUser.id, timestamp);
+  }
   if (process.env.SUUR_FORCE_DEFAULT_PASSWORD_CHANGE !== 'false') {
     const defaultUsername = process.env.SUUR_DEFAULT_USERNAME || 'alaferoce';
     const defaultPassword = process.env.SUUR_DEFAULT_PASSWORD || '7Admin7';

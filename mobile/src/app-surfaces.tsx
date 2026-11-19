@@ -144,6 +144,34 @@ export function SearchSurface({ locale, query, filters, labels, onQuery, onFilte
   </section>;
 }
 
+function LabelRow({ label, onUpdate, onDelete }: {
+  label: Label;
+  onUpdate: (label: Label) => Promise<void>;
+  onDelete: (label: Label) => Promise<void>;
+}) {
+  const [draftName, setDraftName] = useState<string | null>(null);
+  const currentName = draftName ?? label.name;
+  const commitName = () => {
+    if (draftName === null) return;
+    const trimmed = draftName.trim();
+    setDraftName(null);
+    if (trimmed && trimmed !== label.name) void onUpdate({ ...label, name: trimmed });
+  };
+  return (
+    <div>
+      <input type="color" value={label.color} onChange={(event) => void onUpdate({ ...label, color: event.target.value })} />
+      <input
+        value={currentName}
+        maxLength={80}
+        onChange={(event) => setDraftName(event.target.value)}
+        onBlur={commitName}
+        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
+      />
+      <button className="danger" onClick={() => void onDelete(label)}><Trash2 /></button>
+    </div>
+  );
+}
+
 export function LabelsSurface({ labels, locale, onBack, onCreate, onUpdate, onDelete }: {
   labels: Label[];
   locale: Locale;
@@ -155,7 +183,7 @@ export function LabelsSurface({ labels, locale, onBack, onCreate, onUpdate, onDe
   const palette = ['#ff6a00', '#0891b2', '#7656a8', '#d0a419', '#b5485a', '#6f746f'];
   const [name, setName] = useState('');
   const [color, setColor] = useState(palette[0]);
-  return <section className="standalone-surface"><header><button onClick={onBack}><ArrowLeft /></button><h1>{sharedText(locale, 'nav.labels')}</h1></header><main className="labels-manager"><form onSubmit={(event) => { event.preventDefault(); if (!name.trim()) return; void onCreate(name, color).then(() => setName('')); }}><input value={name} onChange={(event) => setName(event.target.value)} placeholder={sharedText(locale, 'labels.new')} maxLength={80} /><div>{palette.map((item) => <button type="button" key={item} className={color === item ? 'selected' : ''} style={{ background: item }} onClick={() => setColor(item)}>{color === item && <Check />}</button>)}</div><button className="primary-small"><Plus />{mobileText(locale, 'create')}</button></form><div className="label-rows">{labels.map((label) => <div key={label.id}><input type="color" value={label.color} onChange={(event) => void onUpdate({ ...label, color: event.target.value })} /><input value={label.name} onChange={(event) => void onUpdate({ ...label, name: event.target.value })} /><button className="danger" onClick={() => void onDelete(label)}><Trash2 /></button></div>)}{!labels.length && <p><Tag />{mobileText(locale, 'noLabels')}</p>}</div></main></section>;
+  return <section className="standalone-surface"><header><button onClick={onBack}><ArrowLeft /></button><h1>{sharedText(locale, 'nav.labels')}</h1></header><main className="labels-manager"><form onSubmit={(event) => { event.preventDefault(); if (!name.trim()) return; void onCreate(name, color).then(() => setName('')); }}><input value={name} onChange={(event) => setName(event.target.value)} placeholder={sharedText(locale, 'labels.new')} maxLength={80} /><div>{palette.map((item) => <button type="button" key={item} className={color === item ? 'selected' : ''} style={{ background: item }} onClick={() => setColor(item)}>{color === item && <Check />}</button>)}</div><button className="primary-small"><Plus />{mobileText(locale, 'create')}</button></form><div className="label-rows">{labels.map((label) => <LabelRow key={label.id} label={label} onUpdate={onUpdate} onDelete={onDelete} />)}{!labels.length && <p><Tag />{mobileText(locale, 'noLabels')}</p>}</div></main></section>;
 }
 
 export function CalendarSurface({ notes, locale, onOpen }: { notes: Note[]; locale: Locale; onOpen: (note: Note) => void }) {

@@ -5,6 +5,7 @@ import {
   createNoteOperation,
   replaceLocalNote,
   sortMobileNotes,
+  updateNoteOperation,
   visibleMobileNotes,
   mergeMobileDraft,
 } from '../lib/mobile-note-actions.ts';
@@ -53,8 +54,20 @@ test('mobile views filter archived and trashed notes before sorting them', () =>
   const pinned = { ...active, id: 'pinned', title: 'Pinned', pinned: true, position: 20 };
   const archived = { ...active, id: 'archived', title: 'Archive', archived: true };
   const trashed = { ...active, id: 'trashed', title: 'Trash', trashedAt: new Date().toISOString() };
-  const full = { ...state, notes: [archived, active, trashed, pinned] };
-  assert.deepEqual(sortMobileNotes(visibleMobileNotes(full, 'notes', ''), 'manual').map((note) => note.id), ['pinned', 'active']);
-  assert.deepEqual(visibleMobileNotes(full, 'archive', '').map((note) => note.id), ['archived']);
+  const sharedAssignedByMe = { ...active, id: 'shared-mine', assignedUserId: 'user-2' };
+  const sharedArchived = { ...active, id: 'shared-archived', ownerId: 'user-2', assignedUserId: 'user-1', archived: true };
+  const full = { ...state, notes: [archived, active, trashed, pinned, sharedAssignedByMe, sharedArchived] };
+  assert.deepEqual(sortMobileNotes(visibleMobileNotes(full, 'notes', ''), 'manual').map((note) => note.id), ['pinned', 'active', 'shared-mine']);
+  assert.deepEqual(visibleMobileNotes(full, 'archive', '').map((note) => note.id), ['archived', 'shared-archived']);
+  assert.deepEqual(visibleMobileNotes(full, 'shared', '').map((note) => note.id), ['shared-mine']);
   assert.deepEqual(visibleMobileNotes(full, 'trash', 'trash').map((note) => note.id), ['trashed']);
+});
+
+test('non-owner mobile updates omit owner-only fields', () => {
+  const state = createEmptyMobileState('server-1', 'user-1');
+  const assignedNote = { ...createMobileNote(state), ownerId: 'user-2', assignedUserId: 'user-1', labels: [{ id: 'l1', name: 'OwnerLabel', color: '#ff6a00', createdAt: '', updatedAt: '' }] };
+  const op = updateNoteOperation(assignedNote, 'user-1');
+  assert.equal(op.body.labelIds, undefined);
+  assert.equal(op.body.assignedUserId, undefined);
+  assert.equal(op.body.trashedAt, undefined);
 });

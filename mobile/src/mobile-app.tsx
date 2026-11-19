@@ -230,7 +230,7 @@ export function MobileApp() {
       const latest = await store.readState();
       const current = latest.notes.find((item) => item.id === note.id);
       const updated = current && original ? mergeMobileDraft(current, note, original) : { ...note, updatedAt: new Date().toISOString() };
-      const operation = isNew && !current ? createNoteOperation(updated) : updateNoteOperation(updated);
+      const operation = isNew && !current ? createNoteOperation(updated) : updateNoteOperation(updated, latest.userId);
       const next = replaceLocalNote(latest, updated);
       await store.writeStateAndEnqueue(next, operation);
       setState(next); setPending((await store.readQueue()).length); setStatus('pending');
@@ -263,7 +263,7 @@ export function MobileApp() {
   const bulkUpdate = async (mapper: (note: Note) => Note) => {
     if (!state) return;
     const updates = state.notes.filter((note) => selected.has(note.id)).map(mapper);
-    await commit(updates.map(updateNoteOperation), (latest) => ({ ...latest, notes: latest.notes.map((note) => updates.find((item) => item.id === note.id) || note) }));
+    await commit(updates.map((note) => updateNoteOperation(note, state.userId)), (latest) => ({ ...latest, notes: latest.notes.map((note) => updates.find((item) => item.id === note.id) || note) }));
     setSelected(new Set()); setBulkSheet(null);
   };
   const bulkDeleteForever = async () => {
